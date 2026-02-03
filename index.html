@@ -1,0 +1,69 @@
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0" />
+    <title>Rhetor</title>
+    <script src="https://cdn.jsdelivr.net/npm/atob-polyfill@1.0.0/atob.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,400&family=Inter:wght@300;400;500&display=swap" rel="stylesheet">
+    <style>
+      body {
+        background-color: #FAFAF9; /* Warm stone */
+        color: #1C1917; /* Charcoal */
+        -webkit-font-smoothing: antialiased;
+        font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      }
+      h1, h2, h3, h4, .serif {
+        font-family: 'Cormorant Garamond', serif;
+      }
+      /* Hide scrollbar for clean look */
+      ::-webkit-scrollbar {
+        width: 0px;
+        background: transparent;
+      }
+    </style>
+    <script>
+      // Global error handler
+      window.onerror = function(message, source, lineno, colno, error) {
+        console.error("Global Error:", message, source, lineno, error);
+        const errDiv = document.createElement('div');
+        errDiv.style.cssText = 'position:fixed;top:0;left:0;width:100%;background:#330000;color:#ff9999;padding:20px;z-index:9999;font-family:monospace;font-size:12px;white-space:pre-wrap;';
+        errDiv.innerText = 'Startup Error: ' + message + '\n' + (error && error.stack ? error.stack : '');
+        document.body.appendChild(errDiv);
+      };
+
+      // Process polyfill
+      window.process = window.process || { env: {} };
+      window.process.env = window.process.env || {};
+      if (!window.process.env.NODE_ENV) {
+        window.process.env.NODE_ENV = 'production';
+      }
+    </script>
+  <script type="importmap">
+{
+  "imports": {
+    "react": "https://esm.sh/react@18.2.0",
+    "react/jsx-runtime": "https://esm.sh/react@18.2.0/jsx-runtime",
+    "react-dom": "https://esm.sh/react-dom@18.2.0",
+    "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
+    "framer-motion": "https://esm.sh/framer-motion@10.16.4?external=react,react-dom",
+    "lucide-react": "https://esm.sh/lucide-react@0.292.0?external=react,react-dom",
+    "@mediapipe/tasks-vision": "https://esm.sh/@mediapipe/tasks-vision@0.10.9",
+    "@google/genai": "https://esm.sh/@google/genai",
+    "eventemitter3": "https://esm.sh/eventemitter3@5.0.1",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.4/",
+    "react/": "https://esm.sh/react@^19.2.4/"
+  }
+}
+</script>
+</head>
+  <body>
+    <div id="root"></div>
+    <script type="text/babel" data-type="module" src="./index.tsx" data-presets="react,typescript" crossorigin="anonymous"></script>
+  </body>
+</html>

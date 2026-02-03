@@ -1,0 +1,8 @@
+{
+  "name": "Rhetor",
+  "description": "A minimalist AI pitch coaching app designed for elegance and focus.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}
