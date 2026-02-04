@@ -1,34 +1,75 @@
+/**
+ * Rhetor - AI-Powered Pitch Coaching PWA
+ * 
+ * Main application component with Zustand state management,
+ * Gemini Live AI integration, and gamification.
+ */
 
-import React, { useState, Component, ReactNode } from 'react';
-import { AnimatePresence } from 'framer-motion';
-import { AppView, PitchOption, SessionResult, Lesson } from './types.ts';
-import { ViewHome } from './components/ViewHome.tsx';
-import { ViewAgora } from './components/ViewAgora.tsx';
-import { ViewSymposium } from './components/ViewSymposium.tsx';
-import { ViewProfile } from './components/ViewProfile.tsx';
-import { ViewLesson } from './components/ViewLesson.tsx';
-import { ViewWarmUp } from './components/ViewWarmUp.tsx';
-import { ViewPrep } from './components/ViewPrep.tsx';
-import { ViewPractice } from './components/ViewPractice.tsx';
-import { ViewReview } from './components/ViewReview.tsx';
-import { BottomNav } from './components/BottomNav.tsx';
-import { AlertTriangle } from 'lucide-react';
-import { RhetorProvider } from './contexts/RhetorContext.tsx';
-import { AIStatusOrb } from './components/AIStatusOrb.tsx';
+import React, { useState, useEffect, useCallback, Component, type ReactNode } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
+import { AlertTriangle, Wifi, WifiOff, RefreshCw } from 'lucide-react';
 
-// Error Boundary (Keep existing)
-interface ErrorBoundaryProps { children?: ReactNode; }
-interface ErrorBoundaryState { hasError: boolean; error: Error | null; }
+// Views
+import { ViewHome } from './components/ViewHome';
+import { ViewAgora } from './components/ViewAgora';
+import { ViewSymposium } from './components/ViewSymposium';
+import { ViewProfile } from './components/ViewProfile';
+import { ViewLesson } from './components/ViewLesson';
+import { ViewWarmUp } from './components/ViewWarmUp';
+import { ViewPrep } from './components/ViewPrep';
+import { ViewPractice } from './components/ViewPractice';
+import { ViewReview } from './components/ViewReview';
+import { BottomNav } from './components/BottomNav';
+import { AIStatusOrb } from './components/AIStatusOrb';
+
+// Types and State
+import { AppView, type Lesson, type PitchOption, type SessionResult } from './types';
+import { useRhetorStore } from './stores/useRhetorStore';
+import { useRhetor, RhetorProvider } from './lib/useRhetor';
+import { getToolHandler } from './lib/tool_handler';
+
+// ============================================================================
+// ERROR BOUNDARY
+// ============================================================================
+
+interface ErrorBoundaryProps {
+  children?: ReactNode;
+}
+
+interface ErrorBoundaryState {
+  hasError: boolean;
+  error: Error | null;
+}
+
 class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
-  constructor(props: ErrorBoundaryProps) { super(props); this.state = { hasError: false, error: null }; }
-  static getDerivedStateFromError(error: Error) { return { hasError: true, error }; }
+  constructor(props: ErrorBoundaryProps) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    console.error('[ErrorBoundary] Caught error:', error, errorInfo);
+  }
+
   render() {
     if (this.state.hasError) {
       return (
         <div className="flex flex-col items-center justify-center min-h-screen bg-stone-50 text-stone-900 p-6 text-center">
           <AlertTriangle className="w-12 h-12 text-amber-600 mb-4" />
-          <h2 className="text-xl serif font-medium mb-2">Something went wrong</h2>
-          <button onClick={() => window.location.reload()} className="mt-8 px-6 py-2 border border-stone-300 rounded-sm">Reload App</button>
+          <h2 className="font-serif text-xl font-medium mb-2">Something went wrong</h2>
+          <p className="text-stone-600 text-sm mb-6 max-w-md">
+            {this.state.error?.message || 'An unexpected error occurred'}
+          </p>
+          <button
+            onClick={() => window.location.reload()}
+            className="px-6 py-2 bg-slate-600 text-white rounded-lg hover:bg-slate-700 transition-colors"
+          >
+            Reload App
+          </button>
         </div>
       );
     }
@@ -36,84 +77,433 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   }
 }
 
-const AppContent: React.FC = () => {
-  const [currentView, setCurrentView] = useState<AppView>(AppView.HOME);
+// ============================================================================
+// CONNECTION STATUS BAR
+// ============================================================================
+
+interface ConnectionStatusBarProps {
+  status: string;
+  onReconnect: () => void;
+}
+
+function ConnectionStatusBar({ status, onReconnect }: ConnectionStatusBarProps) {
+  if (status === 'connected') return null;
+
+  const statusConfig = {
+    disconnected: { icon: WifiOff, text: 'Disconnected', color: 'bg-stone-500' },
+    connecting: { icon: Wifi, text: 'Connecting...', color: 'bg-amber-500' },
+    reconnecting: { icon: RefreshCw, text: 'Reconnecting...', color: 'bg-amber-500' },
+    error: { icon: AlertTriangle, text: 'Connection Error', color: 'bg-red-500' },
+    closed: { icon: WifiOff, text: 'Session Ended', color: 'bg-stone-500' },
+  };
+
+  const config = statusConfig[status as keyof typeof statusConfig] || statusConfig.disconnected;
+  const Icon = config.icon;
+
+  return (
+    <motion.div
+      initial={{ y: -50, opacity: 0 }}
+      animate={{ y: 0, opacity: 1 }}
+      exit={{ y: -50, opacity: 0 }}
+      className={`fixed top-0 left-0 right-0 z-50 ${config.color} text-white px-4 py-2 flex items-center justify-between text-sm`}
+    >
+      <div className="flex items-center gap-2">
+        <Icon className={`w-4 h-4 ${status === 'reconnecting' ? 'animate-spin' : ''}`} />
+        <span>{config.text}</span>
+      </div>
+      {(status === 'error' || status === 'disconnected') && (
+        <button
+          onClick={onReconnect}
+          className="px-3 py-1 bg-white/20 rounded hover:bg-white/30 transition-colors"
+        >
+          Reconnect
+        </button>
+      )}
+    </motion.div>
+  );
+}
+
+// ============================================================================
+// CELEBRATION OVERLAY
+// ============================================================================
+
+function CelebrationOverlay() {
+  const celebrationPending = useRhetorStore(s => s.celebrationPending);
+  const clearCelebration = useRhetorStore(s => s.clearCelebration);
+
+  useEffect(() => {
+    if (celebrationPending) {
+      const timer = setTimeout(clearCelebration, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [celebrationPending, clearCelebration]);
+
+  if (!celebrationPending) return null;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 pointer-events-none z-40 flex items-center justify-center"
+    >
+      {celebrationPending === 'confetti' && (
+        <div className="text-6xl animate-bounce">🎉</div>
+      )}
+      {celebrationPending === 'coins' && (
+        <div className="text-6xl animate-bounce">💰</div>
+      )}
+      {celebrationPending === 'stars' && (
+        <div className="text-6xl animate-bounce">⭐</div>
+      )}
+      {celebrationPending === 'achievement' && (
+        <div className="text-6xl animate-bounce">🏆</div>
+      )}
+      {celebrationPending === 'streak' && (
+        <div className="text-6xl animate-bounce">🔥</div>
+      )}
+    </motion.div>
+  );
+}
+
+// ============================================================================
+// FEEDBACK TOAST
+// ============================================================================
+
+function FeedbackToast() {
+  const feedbackPending = useRhetorStore(s => s.feedbackPending);
+  const clearFeedback = useRhetorStore(s => s.clearFeedback);
+
+  useEffect(() => {
+    if (feedbackPending) {
+      const timer = setTimeout(clearFeedback, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [feedbackPending, clearFeedback]);
+
+  if (!feedbackPending) return null;
+
+  const typeStyles = {
+    positive: 'bg-emerald-500 text-white',
+    improvement: 'bg-amber-500 text-white',
+    warning: 'bg-orange-500 text-white',
+    filler_alert: 'bg-rose-400 text-white',
+    pace_alert: 'bg-blue-500 text-white',
+    posture_alert: 'bg-purple-500 text-white',
+  };
+
+  return (
+    <motion.div
+      initial={{ y: 50, opacity: 0 }}
+      animate={{ y: 0, opacity: 1 }}
+      exit={{ y: 50, opacity: 0 }}
+      className={`fixed bottom-24 left-4 right-4 z-40 ${typeStyles[feedbackPending.type as keyof typeof typeStyles] || 'bg-slate-600 text-white'} px-4 py-3 rounded-lg shadow-lg`}
+    >
+      <p className="text-sm font-medium">{feedbackPending.message}</p>
+    </motion.div>
+  );
+}
+
+// ============================================================================
+// FILLER INDICATOR
+// ============================================================================
+
+function FillerIndicator() {
+  const recentFillerWord = useRhetorStore(s => s.recentFillerWord);
+
+  if (!recentFillerWord) return null;
+
+  return (
+    <motion.div
+      initial={{ scale: 0, opacity: 0 }}
+      animate={{ scale: 1, opacity: 1 }}
+      exit={{ scale: 0, opacity: 0 }}
+      className="fixed top-20 right-4 z-30 bg-rose-100 border border-rose-300 text-rose-700 px-3 py-1 rounded-full text-sm font-medium"
+    >
+      "{recentFillerWord}"
+    </motion.div>
+  );
+}
+
+// ============================================================================
+// NAVIGATION CONFIRMATION MODAL
+// ============================================================================
+
+function NavigationConfirmModal() {
+  const pendingNavigation = useRhetorStore(s => s.pendingNavigation);
+  const confirmNavigation = useRhetorStore(s => s.confirmNavigation);
+  const cancelNavigation = useRhetorStore(s => s.cancelNavigation);
+
+  if (!pendingNavigation) return null;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4"
+    >
+      <motion.div
+        initial={{ scale: 0.9, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        className="bg-white rounded-xl p-6 max-w-sm w-full shadow-xl"
+      >
+        <h3 className="font-serif text-lg font-medium mb-2">Leave Session?</h3>
+        <p className="text-stone-600 text-sm mb-6">
+          You're in an active session. Are you sure you want to leave?
+        </p>
+        <div className="flex gap-3">
+          <button
+            onClick={cancelNavigation}
+            className="flex-1 px-4 py-2 border border-stone-300 rounded-lg text-stone-700 hover:bg-stone-50"
+          >
+            Stay
+          </button>
+          <button
+            onClick={confirmNavigation}
+            className="flex-1 px-4 py-2 bg-slate-600 text-white rounded-lg hover:bg-slate-700"
+          >
+            Leave
+          </button>
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+}
+
+// ============================================================================
+// MAIN APP CONTENT
+// ============================================================================
+
+function AppContent() {
+  // Get API key from environment or prompt
+  const [apiKey] = useState(() => {
+    // Try to get from various sources
+    return (
+      (import.meta as any).env?.VITE_GEMINI_API_KEY ||
+      (window as any).GEMINI_API_KEY ||
+      localStorage.getItem('rhetor_api_key') ||
+      ''
+    );
+  });
+
+  // Initialize Rhetor hook
+  const rhetor = useRhetor({
+    apiKey,
+    autoConnect: !!apiKey,
+    enableFillerDetection: true,
+  });
+
+  // Local view state (will be synced with store)
+  const [localView, setLocalView] = useState<AppView>(AppView.HOME);
   const [activeLesson, setActiveLesson] = useState<Lesson | null>(null);
   const [selectedPitch, setSelectedPitch] = useState<PitchOption | null>(null);
   const [sessionResult, setSessionResult] = useState<SessionResult | null>(null);
 
+  // Zustand store
+  const storeView = useRhetorStore(s => s.currentView);
+  const navigate = useRhetorStore(s => s.navigate);
+
+  // Sync store view with local view
+  useEffect(() => {
+    const viewMap: Record<string, AppView> = {
+      HOME: AppView.HOME,
+      AGORA: AppView.AGORA,
+      SYMPOSIUM: AppView.SYMPOSIUM,
+      PROFILE: AppView.PROFILE,
+      WARMUP: AppView.WARMUP,
+      PREP: AppView.PREP,
+      PRACTICE: AppView.PRACTICE,
+      REVIEW: AppView.REVIEW,
+      LESSON: AppView.LESSON,
+    };
+    
+    if (viewMap[storeView] !== undefined && viewMap[storeView] !== localView) {
+      setLocalView(viewMap[storeView]);
+    }
+  }, [storeView, localView]);
+
+  // Handle view changes
+  const handleViewChange = useCallback((view: AppView) => {
+    setLocalView(view);
+    navigate(AppView[view]);
+  }, [navigate]);
+
   // Full screen modes hide the bottom nav
   const isFullScreen = [
-      AppView.WARMUP, 
-      AppView.PREP, 
-      AppView.PRACTICE, 
-      AppView.REVIEW, 
-      AppView.LESSON
-  ].includes(currentView);
+    AppView.WARMUP,
+    AppView.PREP,
+    AppView.PRACTICE,
+    AppView.REVIEW,
+    AppView.LESSON,
+  ].includes(localView);
 
-  const handleLessonSelect = (lesson: Lesson) => {
-      setActiveLesson(lesson);
-      setCurrentView(AppView.LESSON);
-  };
+  // Handlers
+  const handleLessonSelect = useCallback((lesson: Lesson) => {
+    setActiveLesson(lesson);
+    handleViewChange(AppView.LESSON);
+    
+    // Set AI mode to lesson coach
+    rhetor.setMode('coach_lesson', {
+      lesson: {
+        id: lesson.id,
+        title: lesson.title,
+        description: lesson.description,
+        pillar: lesson.pillarId,
+      },
+      stepNumber: 0,
+    });
+  }, [handleViewChange, rhetor]);
 
-  const handleLessonExit = () => {
-      setActiveLesson(null);
-      setCurrentView(AppView.AGORA);
-  };
+  const handleLessonExit = useCallback(() => {
+    setActiveLesson(null);
+    handleViewChange(AppView.AGORA);
+    rhetor.setMode('welcomer');
+  }, [handleViewChange, rhetor]);
 
-  const handlePracticeEnd = (result: SessionResult) => {
-      setSessionResult(result);
-      setCurrentView(AppView.REVIEW);
-  };
+  const handlePracticeEnd = useCallback((result: SessionResult) => {
+    setSessionResult(result);
+    handleViewChange(AppView.REVIEW);
+    rhetor.setMode('analyst');
+  }, [handleViewChange, rhetor]);
+
+  const handleWarmupComplete = useCallback(() => {
+    handleViewChange(AppView.PREP);
+  }, [handleViewChange]);
+
+  const handleWarmupExit = useCallback(() => {
+    handleViewChange(AppView.HOME);
+    rhetor.setMode('welcomer');
+  }, [handleViewChange, rhetor]);
+
+  // Set welcomer mode when on home
+  useEffect(() => {
+    if (localView === AppView.HOME && rhetor.isConnected) {
+      rhetor.setMode('welcomer');
+    }
+  }, [localView, rhetor.isConnected, rhetor]);
 
   return (
     <main className="min-h-screen bg-stone-50 text-stone-900 font-sans selection:bg-stone-200 overflow-hidden relative">
-        <AIStatusOrb />
+      {/* Connection Status */}
+      <AnimatePresence>
+        <ConnectionStatusBar
+          status={rhetor.connectionStatus}
+          onReconnect={rhetor.reconnect}
+        />
+      </AnimatePresence>
 
-        <AnimatePresence mode="wait">
-            {/* Tab Views */}
-            {currentView === AppView.HOME && <ViewHome key="home" onChangeView={setCurrentView} />}
-            {currentView === AppView.AGORA && <ViewAgora key="agora" onSelectLesson={handleLessonSelect} />}
-            {currentView === AppView.SYMPOSIUM && <ViewSymposium key="symposium" />}
-            {currentView === AppView.PROFILE && <ViewProfile key="profile" />}
+      {/* AI Status Orb */}
+      <AIStatusOrb />
 
-            {/* Full Screen Views */}
-            {currentView === AppView.LESSON && activeLesson && (
-                <ViewLesson key="lesson" lesson={activeLesson} onExit={handleLessonExit} />
-            )}
-            
-            {currentView === AppView.WARMUP && (
-                <ViewWarmUp key="warmup" onComplete={() => setCurrentView(AppView.PREP)} onExit={() => setCurrentView(AppView.HOME)} />
-            )}
-            
-            {currentView === AppView.PREP && (
-                <ViewPrep key="prep" onBegin={() => setCurrentView(AppView.PRACTICE)} onBack={() => setCurrentView(AppView.HOME)} />
-            )}
-            
-            {currentView === AppView.PRACTICE && (
-                <ViewPractice key="practice" pitchOption={selectedPitch} onEnd={handlePracticeEnd} />
-            )}
-            
-            {currentView === AppView.REVIEW && (
-                <ViewReview key="review" result={sessionResult} onReset={() => setCurrentView(AppView.HOME)} />
-            )}
-        </AnimatePresence>
+      {/* Celebration Overlay */}
+      <AnimatePresence>
+        <CelebrationOverlay />
+      </AnimatePresence>
 
-        {!isFullScreen && (
-            <BottomNav currentView={currentView} onChangeView={setCurrentView} />
+      {/* Feedback Toast */}
+      <AnimatePresence>
+        <FeedbackToast />
+      </AnimatePresence>
+
+      {/* Filler Indicator */}
+      <AnimatePresence>
+        <FillerIndicator />
+      </AnimatePresence>
+
+      {/* Navigation Confirmation */}
+      <AnimatePresence>
+        <NavigationConfirmModal />
+      </AnimatePresence>
+
+      {/* Views */}
+      <AnimatePresence mode="wait">
+        {/* Tab Views */}
+        {localView === AppView.HOME && (
+          <ViewHome key="home" onChangeView={handleViewChange} />
         )}
+        {localView === AppView.AGORA && (
+          <ViewAgora key="agora" onSelectLesson={handleLessonSelect} />
+        )}
+        {localView === AppView.SYMPOSIUM && (
+          <ViewSymposium key="symposium" />
+        )}
+        {localView === AppView.PROFILE && (
+          <ViewProfile key="profile" />
+        )}
+
+        {/* Full Screen Views */}
+        {localView === AppView.LESSON && activeLesson && (
+          <ViewLesson
+            key="lesson"
+            lesson={activeLesson}
+            onExit={handleLessonExit}
+          />
+        )}
+
+        {localView === AppView.WARMUP && (
+          <ViewWarmUp
+            key="warmup"
+            onComplete={handleWarmupComplete}
+            onExit={handleWarmupExit}
+          />
+        )}
+
+        {localView === AppView.PREP && (
+          <ViewPrep
+            key="prep"
+            onBegin={() => handleViewChange(AppView.PRACTICE)}
+            onBack={() => handleViewChange(AppView.HOME)}
+          />
+        )}
+
+        {localView === AppView.PRACTICE && (
+          <ViewPractice
+            key="practice"
+            pitchOption={selectedPitch}
+            onEnd={handlePracticeEnd}
+          />
+        )}
+
+        {localView === AppView.REVIEW && (
+          <ViewReview
+            key="review"
+            result={sessionResult}
+            onReset={() => handleViewChange(AppView.HOME)}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Bottom Navigation */}
+      {!isFullScreen && (
+        <BottomNav
+          currentView={localView}
+          onChangeView={handleViewChange}
+        />
+      )}
     </main>
   );
 }
 
-const App: React.FC = () => {
+// ============================================================================
+// APP ROOT
+// ============================================================================
+
+function App() {
+  // Get API key for provider
+  const apiKey = 
+    (import.meta as any).env?.VITE_GEMINI_API_KEY ||
+    (window as any).GEMINI_API_KEY ||
+    localStorage.getItem('rhetor_api_key') ||
+    '';
+
   return (
     <ErrorBoundary>
-      <RhetorProvider>
+      <RhetorProvider apiKey={apiKey} autoConnect={!!apiKey}>
         <AppContent />
       </RhetorProvider>
     </ErrorBoundary>
   );
-};
+}
 
 export default App;
