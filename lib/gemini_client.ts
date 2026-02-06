@@ -33,7 +33,7 @@ import { getToolHandler, type ToolCallEvent } from './tool_handler';
 // CONSTANTS
 // ============================================================================
 
-export const DEFAULT_LIVE_API_MODEL = 'gemini-2.5-flash-native-audio-preview';
+export const DEFAULT_LIVE_API_MODEL = 'gemini-2.5-flash-native-audio-preview-12-2025';
 
 const RECONNECT_CONFIG = {
   initialDelayMs: 1000,
@@ -176,8 +176,8 @@ export class GeminiLiveClient {
    * Connect to the Gemini Live API
    */
   public async connect(config: LiveConnectConfig): Promise<boolean> {
-    if (this._status === 'connected' || this._status === 'connecting') {
-      this.log('client.connect', 'Already connected or connecting');
+    if (this._status === 'connected' || this._status === 'connecting' || this._status === 'reconnecting') {
+      this.log('client.connect', `Already ${this._status}`);
       return false;
     }
 
@@ -212,22 +212,20 @@ export class GeminiLiveClient {
     };
 
     try {
-      this.log('client.connect', `Connecting to ${this.model}...`);
-      
       this.session = await this.client.live.connect({
         model: this.model,
         config: finalConfig,
         callbacks,
       });
-
       // Connection successful - status will be updated in onOpen
       return true;
     } catch (e: unknown) {
       const error = e instanceof Error ? e : new Error(String(e));
-      console.error('[GeminiLiveClient] Connection error:', error);
+      console.error('[GeminiLiveClient] Connection error:', error.message, error);
       
       this._lastError = error;
-      this.setStatus(previousStatus === 'reconnecting' ? 'reconnecting' : 'error');
+      // Reset to disconnected so connect() can be retried
+      this.setStatus(previousStatus === 'reconnecting' ? 'reconnecting' : 'disconnected');
       this.session = undefined;
 
       // Emit error event
@@ -445,16 +443,17 @@ export class GeminiLiveClient {
     }
 
     if (this._status !== 'connected' || !this.session) {
-      this.emitter.emit('error', new Error('Client is not connected'));
+      // Silently return false - caller should check isConnected before calling
       return false;
     }
 
     try {
+      const partsArray = Array.isArray(parts) ? parts : [parts];
       this.session.sendClientContent({ 
-        turns: Array.isArray(parts) ? parts : [parts], 
+        turns: [{ role: 'user', parts: partsArray }], 
         turnComplete 
       });
-      this.log('client.send', parts);
+      this.log('client.send', partsArray);
       return true;
     } catch (e) {
       console.error('[GeminiLiveClient] Error sending:', e);
@@ -537,10 +536,18 @@ export class GeminiLiveClient {
     try {
       const responses = await this._toolHandler.handleToolCall(event);
 
-      const functionResponses = responses.map(r => ({
-        id: r.id,
-        response: { result: r.response.success ? r.response.result : r.response.error },
-      }));
+      const functionResponses = responses.map(r => {
+        // SDK requires: name, response (object with string values), and id
+        const fc = toolCall.functionCalls.find(f => f.id === r.id);
+        const resultValue = r.response.success
+          ? (typeof r.response.result === 'string' ? r.response.result : JSON.stringify(r.response.result ?? 'ok'))
+          : (typeof r.response.error === 'string' ? r.response.error : JSON.stringify(r.response.error ?? 'error'));
+        return {
+          id: r.id,
+          name: fc?.name ?? 'unknown',
+          response: { result: resultValue },
+        };
+      });
 
       this.sendToolResponse({ functionResponses });
     } catch (e) {

@@ -27,12 +27,17 @@ export const ViewPractice: React.FC<ViewPracticeProps> = ({ pitchOption, onEnd }
   const [showPrompter, setShowPrompter] = useState(true);
   const videoRef = useRef<HTMLVideoElement>(null);
 
+  // Set mode once when connected
+  const modeSetRef = useRef(false);
   useEffect(() => {
-    if (isConnected) {
-        setMode(AgentMode.COACH_PRACTICE, { talkingPoints });
+    if (isConnected && !modeSetRef.current) {
+      modeSetRef.current = true;
+      setMode(AgentMode.COACH_PRACTICE, { talkingPoints });
     }
-    
-    // Start local camera for self-view
+  }, [isConnected, setMode, talkingPoints]);
+  
+  // Start local camera for self-view
+  useEffect(() => {
     navigator.mediaDevices.getUserMedia({ video: true }).then(s => {
         setStream(s);
         if (videoRef.current) videoRef.current.srcObject = s;

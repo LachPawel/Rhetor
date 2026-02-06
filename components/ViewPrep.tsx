@@ -1,5 +1,5 @@
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { FadeTransition } from './FadeTransition.tsx';
 import { ArrowLeft, Mic } from 'lucide-react';
 import { useRhetor } from '../contexts/RhetorContext.tsx';
@@ -13,11 +13,14 @@ interface ViewPrepProps {
 export const ViewPrep: React.FC<ViewPrepProps> = ({ onBegin, onBack }) => {
   const { setMode, isConnected, talkingPoints, aiResponse, isSpeaking } = useRhetor();
 
+  // Set mode once when connected
+  const modeSetRef = useRef(false);
   useEffect(() => {
-    if (isConnected) {
+    if (isConnected && !modeSetRef.current) {
+        modeSetRef.current = true;
         setMode(AgentMode.INTERVIEWER);
     }
-  }, [isConnected]);
+  }, [isConnected, setMode]);
 
   // If the AI tool has saved the talking points, we are ready
   useEffect(() => {

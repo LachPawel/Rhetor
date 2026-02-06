@@ -1,5 +1,5 @@
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { FadeTransition } from './FadeTransition.tsx';
 import { Lesson, AgentMode } from '../types.ts';
 import { useRhetor } from '../contexts/RhetorContext.tsx';
@@ -18,10 +18,13 @@ export const ViewLesson: React.FC<ViewLessonProps> = ({ lesson, onExit }) => {
           if (!isConnected) await connect();
       };
       init();
-  }, []);
+  }, [isConnected, connect]);
 
+  // Set mode once when connected - use ref to prevent multiple calls
+  const modeSetRef = useRef(false);
   useEffect(() => {
-      if (isConnected) {
+      if (isConnected && !modeSetRef.current) {
+          modeSetRef.current = true;
           // Critical: Passing lessonId so the AI tool can reference it
           setMode(AgentMode.COACH_LESSON, { 
               lessonId: lesson.id,
@@ -29,7 +32,7 @@ export const ViewLesson: React.FC<ViewLessonProps> = ({ lesson, onExit }) => {
               lessonDesc: lesson.description 
           });
       }
-  }, [isConnected, lesson]);
+  }, [isConnected, lesson, setMode]);
 
   // Check if this specific lesson is complete to show visual feedback
   const isComplete = user.completedLessons.includes(lesson.id);

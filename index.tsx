@@ -9,8 +9,6 @@ if (!rootElement) {
 }
 
 const root = ReactDOM.createRoot(rootElement);
-root.render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>
-);
+// Note: StrictMode disabled because it double-mounts components,
+// which breaks WebSocket connections and audio streaming.
+root.render(<App />);

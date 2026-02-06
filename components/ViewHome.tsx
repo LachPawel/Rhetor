@@ -10,13 +10,9 @@ interface ViewHomeProps {
 }
 
 export const ViewHome: React.FC<ViewHomeProps> = ({ onChangeView }) => {
-  const { connect, isConnected, isConnecting, setMode, user } = useRhetor();
+  const { connect, isConnected, isConnecting, user } = useRhetor();
 
-  useEffect(() => {
-    if (isConnected) {
-        setMode(AgentMode.WELCOMER);
-    }
-  }, [isConnected]);
+  // Note: setMode(WELCOMER) is handled by App.tsx when view is HOME
 
   const handleStartJourney = async () => {
     if (!isConnected) await connect();

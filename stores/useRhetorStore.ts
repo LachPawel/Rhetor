@@ -51,7 +51,7 @@ export interface DrillProgress {
 
 export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'reconnecting' | 'error' | 'closed';
 
-export type AIMode = 'welcomer' | 'coach_lesson' | 'coach_warmup' | 'interviewer' | 'analyst' | 'idle';
+export type AIMode = 'welcomer' | 'coach_lesson' | 'coach_warmup' | 'coach_practice' | 'interviewer' | 'analyst' | 'idle';
 
 export interface VisualState {
   id: string;
@@ -135,6 +135,15 @@ interface AISlice {
   setError: (error: string | null) => void;
 }
 
+interface PitchSlice {
+  talkingPoints: string[];
+  pitchTopic: string;
+  
+  // Actions
+  setTalkingPoints: (points: string[]) => void;
+  setPitchTopic: (topic: string) => void;
+}
+
 interface UISlice {
   currentView: string;
   previousView: string | null;
@@ -164,7 +173,7 @@ interface UISlice {
 // COMBINED STORE TYPE
 // ============================================================================
 
-export type RhetorStore = GamificationSlice & ProgressSlice & SessionSlice & AISlice & UISlice;
+export type RhetorStore = GamificationSlice & ProgressSlice & SessionSlice & AISlice & PitchSlice & UISlice;
 
 // ============================================================================
 // INITIAL STATE
@@ -577,6 +586,24 @@ export const useRhetorStore = create<RhetorStore>()(
           if (error) {
             state.connectionStatus = 'error';
           }
+        });
+      },
+
+      // ========================================================================
+      // PITCH SLICE
+      // ========================================================================
+      talkingPoints: [],
+      pitchTopic: '',
+
+      setTalkingPoints: (points: string[]) => {
+        set((state) => {
+          state.talkingPoints = points;
+        });
+      },
+
+      setPitchTopic: (topic: string) => {
+        set((state) => {
+          state.pitchTopic = topic;
         });
       },
 

@@ -223,7 +223,13 @@ export class AudioStreamer {
   }
 
   complete() {
+    // Just mark stream as complete - onComplete will be called
+    // by the source.onended handler when audio actually finishes playing
     this.isStreamComplete = true;
-    this.onComplete();
+    
+    // If queue is already empty and nothing is playing, call onComplete now
+    if (this.audioQueue.length === 0 && !this.isPlaying) {
+      this.onComplete();
+    }
   }
 }

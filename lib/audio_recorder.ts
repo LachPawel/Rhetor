@@ -28,7 +28,14 @@ export class AudioRecorder {
 
     this.starting = new Promise(async (resolve, reject) => {
       try {
-        this.stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        this.stream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+            sampleRate: this.sampleRate,
+          },
+        });
         this.audioContext = await audioContext({ sampleRate: this.sampleRate });
         this.source = this.audioContext.createMediaStreamSource(this.stream);
 
@@ -72,6 +79,25 @@ export class AudioRecorder {
       }
     });
     return this.starting;
+  }
+
+  /** Temporarily mute the mic (disconnect source from worklets) */
+  mute() {
+    if (this.recording && this.source) {
+      try { this.source.disconnect(); } catch { /* already disconnected */ }
+    }
+  }
+
+  /** Unmute the mic (reconnect source to worklets) */
+  unmute() {
+    if (this.recording && this.source) {
+      if (this.recordingWorklet) {
+        try { this.source.connect(this.recordingWorklet); } catch { /* already connected */ }
+      }
+      if (this.vuWorklet) {
+        try { this.source.connect(this.vuWorklet); } catch { /* already connected */ }
+      }
+    }
   }
 
   stop() {

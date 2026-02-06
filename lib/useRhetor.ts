@@ -113,24 +113,32 @@ export function useRhetor(options: UseRhetorOptions): UseRhetorReturn {
   // INITIALIZATION
   // ============================================================================
   
+  // Lazily initialise AudioContext + AudioStreamer (must happen after a user gesture)
+  const ensureAudioContext = useCallback(() => {
+    if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
+      audioContextRef.current = new AudioContext({ sampleRate: AUDIO_SAMPLE_RATE });
+    }
+    if (!streamerRef.current) {
+      streamerRef.current = new AudioStreamer(audioContextRef.current);
+    }
+  }, []);
+
   useEffect(() => {
-    // Initialize audio context
-    audioContextRef.current = new AudioContext({ sampleRate: AUDIO_SAMPLE_RATE });
-    
-    // Initialize audio streamer
-    streamerRef.current = new AudioStreamer(audioContextRef.current);
-    
     return () => {
-      // Cleanup
+      // Cleanup — null the refs so fresh instances are created on remount (React Strict Mode)
       if (clientRef.current) {
         clientRef.current.destroy();
+        clientRef.current = null;
       }
       if (recorderRef.current) {
         recorderRef.current.stop();
+        recorderRef.current = null;
       }
       if (audioContextRef.current?.state !== 'closed') {
         audioContextRef.current?.close();
       }
+      audioContextRef.current = null;
+      streamerRef.current = null;
     };
   }, []);
   
@@ -144,84 +152,126 @@ export function useRhetor(options: UseRhetorOptions): UseRhetorReturn {
       return false;
     }
     
-    // Create or reuse client
+    // Create client if needed (only once)
     if (!clientRef.current) {
-      clientRef.current = createGeminiLiveClient(apiKey);
+      const client = createGeminiLiveClient(apiKey);
+      clientRef.current = client;
+      
+      // Set up event listeners ONCE on the fresh client
+      client.on('statuschange', (status: ConnectionStatus) => {
+        setConnectionStatus(status);
+      });
+      
+      client.on('audio', (data: ArrayBuffer) => {
+        setIsSpeaking(true);
+        streamerRef.current?.addPCM16(new Uint8Array(data));
+      });
+      
+      client.on('turncomplete', () => {
+        // Just signal the streamer that no more chunks are incoming.
+        // The streamer will call onComplete() when the queue is actually empty.
+        streamerRef.current?.complete();
+      });
+      
+      client.on('interrupted', () => {
+        setIsSpeaking(false);
+        streamerRef.current?.stop();
+      });
+      
+      client.on('inputTranscription', (text: string, isFinal: boolean) => {
+        setUserTranscript(prev => isFinal ? text : prev + text);
+        
+        // Process for fillers
+        if (enableFillerDetection && isFinal) {
+          const detections = processTranscript(text);
+          detections.forEach(d => addFillerEvent(d.word, d.position));
+        }
+        
+        // Update store transcript
+        if (isFinal) {
+          updateTranscript(text);
+        }
+      });
+      
+      client.on('outputTranscription', (text: string) => {
+        setAiTranscript(text);
+      });
+      
+      client.on('error', (e: Error) => {
+        console.error('[useRhetor] Client error:', e);
+        setError(e.message);
+      });
+      
+      client.on('reconnecting', (attempt: number, max: number) => {
+        console.log(`[useRhetor] Reconnecting ${attempt}/${max}`);
+      });
+      
+      client.on('reconnected', () => {
+        setError(null);
+      });
     }
     
     const client = clientRef.current;
     
-    // Set up event listeners
-    client.on('statuschange', (status: ConnectionStatus) => {
-      setConnectionStatus(status);
-    });
-    
-    client.on('audio', (data: ArrayBuffer) => {
-      setIsSpeaking(true);
-      streamerRef.current?.addPCM16(new Uint8Array(data));
-    });
-    
-    client.on('turncomplete', () => {
-      setIsSpeaking(false);
-      streamerRef.current?.complete();
-    });
-    
-    client.on('interrupted', () => {
-      setIsSpeaking(false);
-      streamerRef.current?.stop();
-    });
-    
-    client.on('inputTranscription', (text: string, isFinal: boolean) => {
-      setUserTranscript(prev => isFinal ? text : prev + text);
-      
-      // Process for fillers
-      if (enableFillerDetection && isFinal) {
-        const detections = processTranscript(text);
-        detections.forEach(d => addFillerEvent(d.word, d.position));
-      }
-      
-      // Update store transcript
-      if (isFinal) {
-        updateTranscript(text);
-      }
-    });
-    
-    client.on('outputTranscription', (text: string) => {
-      setAiTranscript(text);
-    });
-    
-    client.on('error', (e: Error) => {
-      setError(e.message);
-    });
-    
-    client.on('reconnecting', (attempt: number, max: number) => {
-      console.log(`[useRhetor] Reconnecting ${attempt}/${max}`);
-    });
-    
-    client.on('reconnected', () => {
-      setError(null);
-    });
-    
-    // Resume audio context if suspended
+    // Create AudioContext now (inside a user-gesture-initiated call path)
+    ensureAudioContext();
     if (audioContextRef.current?.state === 'suspended') {
       await audioContextRef.current.resume();
     }
     
-    // Connect with configuration
+    // Set up streamer completion handler
+    if (streamerRef.current) {
+      streamerRef.current.onComplete = () => {
+        setIsSpeaking(false);
+      };
+    }
+    
+    // Connect with configuration (flat LiveConnectConfig — no generationConfig wrapper)
     const success = await client.connect({
       systemInstruction: { parts: [{ text: RHETOR_SYSTEM_INSTRUCTION }] },
-      generationConfig: {
-        responseModalities: [Modality.AUDIO],
-        speechConfig: {
-          voiceConfig: {
-            prebuiltVoiceConfig: { voiceName: 'Fenrir' },
-          },
+      responseModalities: [Modality.AUDIO],
+      speechConfig: {
+        voiceConfig: {
+          prebuiltVoiceConfig: { voiceName: 'Fenrir' },
         },
       },
+      inputAudioTranscription: {},
+      outputAudioTranscription: {},
     });
     
+    // Auto-start microphone after successful connection
+    if (success) {
+      // Small delay to ensure connection is fully established
+      setTimeout(async () => {
+        try {
+          // Create recorder if needed
+          if (!recorderRef.current) {
+            recorderRef.current = new AudioRecorder(MIC_SAMPLE_RATE);
+            
+            recorderRef.current.on('data', (base64: string) => {
+              clientRef.current?.sendRealtimeInput([{
+                mimeType: 'audio/pcm;rate=16000',
+                data: base64,
+              }]);
+            });
+            
+            recorderRef.current.on('volume', (vol: number) => {
+              setVolume(vol);
+            });
+          }
+          
+          await recorderRef.current.start();
+          setIsListening(true);
+          setIsListeningStore(true);
+        } catch (e) {
+          console.error('[useRhetor] Error starting microphone:', e);
+          setError(e instanceof Error ? e.message : 'Microphone access denied');
+        }
+      }, 100);
+    }
+    
     return success;
-  }, [apiKey, enableFillerDetection, processTranscript, setConnectionStatus, setIsSpeaking, setError, updateTranscript, addFillerEvent]);
+  }, [apiKey, enableFillerDetection, ensureAudioContext, processTranscript, setConnectionStatus, setIsSpeaking, setError, updateTranscript, addFillerEvent, setIsListeningStore]);
   
   const disconnect = useCallback(() => {
     clientRef.current?.disconnect();
@@ -234,12 +284,15 @@ export function useRhetor(options: UseRhetorOptions): UseRhetorReturn {
     return clientRef.current?.reconnect() ?? false;
   }, []);
   
-  // Auto-connect if enabled
+  // Auto-connect if enabled (fire once on mount, not on every connect ref change)
+  const connectRef = useRef(connect);
+  connectRef.current = connect;
   useEffect(() => {
     if (autoConnect && apiKey) {
-      connect();
+      connectRef.current();
     }
-  }, [autoConnect, apiKey, connect]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoConnect, apiKey]);
   
   // ============================================================================
   // AUDIO RECORDING

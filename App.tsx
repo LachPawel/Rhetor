@@ -5,7 +5,7 @@
  * Gemini Live AI integration, and gamification.
  */
 
-import React, { useState, useEffect, useCallback, Component, type ReactNode } from 'react';
+import React, { useState, useEffect, useCallback, useRef, Component, type ReactNode } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { AlertTriangle, Wifi, WifiOff, RefreshCw } from 'lucide-react';
 
@@ -25,7 +25,7 @@ import { AIStatusOrb } from './components/AIStatusOrb';
 // Types and State
 import { AppView, type Lesson, type PitchOption, type SessionResult } from './types';
 import { useRhetorStore } from './stores/useRhetorStore';
-import { useRhetor, RhetorProvider } from './lib/useRhetor';
+import { useRhetorContext, RhetorProvider } from './lib/useRhetor';
 import { getToolHandler } from './lib/tool_handler';
 
 // ============================================================================
@@ -276,23 +276,9 @@ function NavigationConfirmModal() {
 // ============================================================================
 
 function AppContent() {
-  // Get API key from environment or prompt
-  const [apiKey] = useState(() => {
-    // Try to get from various sources
-    return (
-      (import.meta as any).env?.VITE_GEMINI_API_KEY ||
-      (window as any).GEMINI_API_KEY ||
-      localStorage.getItem('rhetor_api_key') ||
-      ''
-    );
-  });
-
-  // Initialize Rhetor hook
-  const rhetor = useRhetor({
-    apiKey,
-    autoConnect: !!apiKey,
-    enableFillerDetection: true,
-  });
+  // Use the context provided by RhetorProvider — do NOT call useRhetor() here,
+  // that would create a second client that destroys the provider's client.
+  const rhetor = useRhetorContext();
 
   // Local view state (will be synced with store)
   const [localView, setLocalView] = useState<AppView>(AppView.HOME);
@@ -376,12 +362,18 @@ function AppContent() {
     rhetor.setMode('welcomer');
   }, [handleViewChange, rhetor]);
 
-  // Set welcomer mode when on home
+  // Set welcomer mode when on home - only once when connected
+  const welcomerSetRef = useRef(false);
   useEffect(() => {
-    if (localView === AppView.HOME && rhetor.isConnected) {
+    if (localView === AppView.HOME && rhetor.isConnected && !welcomerSetRef.current) {
+      welcomerSetRef.current = true;
       rhetor.setMode('welcomer');
     }
-  }, [localView, rhetor.isConnected, rhetor]);
+    // Reset the ref when leaving home
+    if (localView !== AppView.HOME) {
+      welcomerSetRef.current = false;
+    }
+  }, [localView, rhetor.isConnected, rhetor.setMode]);
 
   return (
     <main className="min-h-screen bg-stone-50 text-stone-900 font-sans selection:bg-stone-200 overflow-hidden relative">
@@ -486,20 +478,159 @@ function AppContent() {
 }
 
 // ============================================================================
+// API KEY PROMPT
+// ============================================================================
+
+function ApiKeyPrompt({ onSubmit }: { onSubmit: (key: string) => void }) {
+  const [key, setKey] = useState('');
+  const [error, setError] = useState('');
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const trimmed = key.trim();
+    if (!trimmed) {
+      setError('Please enter your API key');
+      return;
+    }
+    localStorage.setItem('rhetor_api_key', trimmed);
+    onSubmit(trimmed);
+  };
+
+  return (
+    <div className="flex flex-col items-center justify-center min-h-screen bg-stone-50 text-stone-900 p-6">
+      <div className="w-full max-w-md">
+        <h1 className="font-serif text-3xl font-medium text-center mb-2">Rhetor</h1>
+        <p className="text-stone-500 text-center text-sm mb-8">
+          Enter your Gemini API key to get started
+        </p>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label htmlFor="apiKey" className="block text-sm font-medium text-stone-700 mb-1">
+              Gemini API Key
+            </label>
+            <input
+              id="apiKey"
+              type="password"
+              value={key}
+              onChange={(e) => { setKey(e.target.value); setError(''); }}
+              placeholder="AIza..."
+              className="w-full px-4 py-3 border border-stone-300 rounded-lg bg-white text-stone-900 placeholder-stone-400 focus:outline-none focus:ring-2 focus:ring-slate-500 focus:border-transparent"
+              autoFocus
+            />
+            {error && <p className="text-red-500 text-sm mt-1">{error}</p>}
+          </div>
+          <button
+            type="submit"
+            className="w-full px-4 py-3 bg-slate-600 text-white rounded-lg font-medium hover:bg-slate-700 transition-colors"
+          >
+            Connect
+          </button>
+        </form>
+        <p className="text-stone-400 text-xs text-center mt-6">
+          Get a free API key at{' '}
+          <a
+            href="https://aistudio.google.com/apikey"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-slate-600 underline hover:text-slate-800"
+          >
+            aistudio.google.com/apikey
+          </a>
+        </p>
+        <p className="text-stone-400 text-xs text-center mt-2">
+          Your key is stored locally and never sent to any server besides Google.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// LANDING PAGE
+// ============================================================================
+
+function LandingPage({ onEnter }: { onEnter: () => void }) {
+  return (
+    <div className="flex flex-col items-center justify-center min-h-screen bg-stone-50 text-stone-900 p-6 select-none">
+      {/* Decorative glow */}
+      <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-72 h-72 bg-slate-300/30 rounded-full blur-3xl pointer-events-none" />
+
+      <motion.div
+        initial={{ opacity: 0, y: 24 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.7, ease: 'easeOut' }}
+        className="relative z-10 flex flex-col items-center gap-6 max-w-sm text-center"
+      >
+        {/* Logo / Title */}
+        <h1 className="font-serif text-5xl font-medium tracking-tight">Rhetor</h1>
+        <p className="text-stone-500 text-base leading-relaxed">
+          Your AI-powered pitch coach.
+          <br />
+          Practice speaking, get real-time feedback, and master the art of rhetoric.
+        </p>
+
+        {/* Enter button */}
+        <motion.button
+          whileHover={{ scale: 1.03 }}
+          whileTap={{ scale: 0.97 }}
+          onClick={onEnter}
+          className="mt-4 px-10 py-4 bg-slate-700 text-white text-lg font-medium rounded-2xl shadow-lg hover:bg-slate-800 transition-colors focus:outline-none focus:ring-2 focus:ring-slate-500 focus:ring-offset-2"
+        >
+          Enter the Agora
+        </motion.button>
+
+        <p className="text-stone-400 text-xs mt-2">
+          Microphone access will be requested after you enter.
+        </p>
+      </motion.div>
+
+      {/* Footer */}
+      <p className="absolute bottom-6 text-stone-300 text-xs">
+        Powered by Gemini
+      </p>
+    </div>
+  );
+}
+
+// ============================================================================
 // APP ROOT
 // ============================================================================
 
 function App() {
   // Get API key for provider
-  const apiKey = 
+  const [apiKey, setApiKey] = useState(() =>
     (import.meta as any).env?.VITE_GEMINI_API_KEY ||
+    process.env.GEMINI_API_KEY ||
     (window as any).GEMINI_API_KEY ||
     localStorage.getItem('rhetor_api_key') ||
-    '';
+    ''
+  );
 
+  // Gate: don't mount the provider / connect until user clicks Enter
+  const [entered, setEntered] = useState(false);
+
+  // Step 1: Need API key
+  if (!apiKey) {
+    return (
+      <ErrorBoundary>
+        <ApiKeyPrompt onSubmit={setApiKey} />
+      </ErrorBoundary>
+    );
+  }
+
+  // Step 2: Have key, show landing page until user clicks Enter
+  if (!entered) {
+    return (
+      <ErrorBoundary>
+        <LandingPage onEnter={() => setEntered(true)} />
+      </ErrorBoundary>
+    );
+  }
+
+  // Step 3: User clicked Enter → mount provider, auto-connect
   return (
     <ErrorBoundary>
-      <RhetorProvider apiKey={apiKey} autoConnect={!!apiKey}>
+      <RhetorProvider apiKey={apiKey} autoConnect>
         <AppContent />
       </RhetorProvider>
     </ErrorBoundary>

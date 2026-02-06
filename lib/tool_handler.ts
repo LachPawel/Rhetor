@@ -464,6 +464,10 @@ export class ToolHandler {
       this.pitchSaver(args);
     }
 
+    // Save to Zustand store for component access
+    this.store.getState().setPitchTopic(args.topic);
+    this.store.getState().setTalkingPoints(args.bullets);
+
     // Store in visual for display
     this.store.getState().showVisual('pitch_bullets', {
       title: args.topic,

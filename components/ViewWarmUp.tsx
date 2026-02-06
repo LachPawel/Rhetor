@@ -27,11 +27,14 @@ export const ViewWarmUp: React.FC<ViewWarmUpProps> = ({ onComplete, onExit }) =>
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
 
+  // Set mode when connected - only run once when isConnected becomes true
+  const modeSetRef = useRef(false);
   useEffect(() => {
-    if (isConnected) {
-        setMode(AgentMode.COACH_WARMUP);
+    if (isConnected && !modeSetRef.current) {
+      modeSetRef.current = true;
+      setMode(AgentMode.COACH_WARMUP);
     }
-  }, [isConnected]);
+  }, [isConnected, setMode]);
 
   // Camera Logic for BODY stage only
   useEffect(() => {

@@ -1,5 +1,5 @@
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { FadeTransition } from './FadeTransition.tsx';
 import { SessionResult, AgentMode } from '../types.ts';
 import { Share2 } from 'lucide-react';
@@ -13,14 +13,17 @@ interface ViewReviewProps {
 export const ViewReview: React.FC<ViewReviewProps> = ({ result, onReset }) => {
   const { setMode, isConnected, aiResponse } = useRhetor();
 
+  // Set mode once when connected
+  const modeSetRef = useRef(false);
   useEffect(() => {
-    if (isConnected && result) {
+    if (isConnected && result && !modeSetRef.current) {
+        modeSetRef.current = true;
         setMode(AgentMode.ANALYST, { 
             duration: result.durationSeconds, 
             wpm: result.wpm 
         });
     }
-  }, [isConnected, result]);
+  }, [isConnected, result, setMode]);
 
   if (!result) return null;
 
