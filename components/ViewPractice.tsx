@@ -4,14 +4,24 @@ import { Mic, Eye, EyeOff } from 'lucide-react';
 import { FadeTransition } from './FadeTransition.tsx';
 import { PitchOption, SessionResult, AgentMode } from '../types.ts';
 import { useRhetor } from '../contexts/RhetorContext.tsx';
+import { useRhetorStore } from '../stores/useRhetorStore.ts';
 
 interface ViewPracticeProps {
   pitchOption: PitchOption | null;
   onEnd: (result: SessionResult) => void;
 }
 
+const getWpmColor = (wpm: number): string => {
+  if (wpm === 0) return 'text-stone-400';
+  if (wpm >= 130 && wpm <= 160) return 'text-emerald-600';
+  if ((wpm >= 110 && wpm < 130) || (wpm > 160 && wpm <= 180)) return 'text-amber-500';
+  return 'text-red-500';
+};
+
 export const ViewPractice: React.FC<ViewPracticeProps> = ({ pitchOption, onEnd }) => {
   const { setMode, isConnected, talkingPoints, aiResponse } = useRhetor();
+  const liveWpm = useRhetorStore((s) => s.currentMetrics?.wpm ?? 0);
+  const liveFillerCount = useRhetorStore((s) => s.currentMetrics?.fillerCount ?? 0);
   const duration = pitchOption?.durationSeconds || 120;
   const [timeLeft, setTimeLeft] = useState(duration);
   const [stream, setStream] = useState<MediaStream | null>(null);
@@ -19,7 +29,6 @@ export const ViewPractice: React.FC<ViewPracticeProps> = ({ pitchOption, onEnd }
   // Stats Ref
   const statsRef = useRef({
     startTime: Date.now(),
-    fillers: 0,
   });
 
   // Teleprompter State
@@ -65,10 +74,10 @@ export const ViewPractice: React.FC<ViewPracticeProps> = ({ pitchOption, onEnd }
     const actualElapsed = Math.floor((Date.now() - statsRef.current.startTime) / 1000);
     onEnd({
       durationSeconds: actualElapsed,
-      postureScore: 85, // Mocked for this refactor as focus is on Voice AI
-      eyeContactScore: 70,
-      fillersCount: statsRef.current.fillers, // In a full implementation, we'd parse the transcript for fillers
-      wpm: 140, 
+      postureScore: 0,
+      eyeContactScore: 0,
+      fillersCount: liveFillerCount,
+      wpm: liveWpm,
       targetDurationSeconds: duration
     });
   };
@@ -101,7 +110,10 @@ export const ViewPractice: React.FC<ViewPracticeProps> = ({ pitchOption, onEnd }
         <div className="flex flex-col gap-1">
           <div className="text-sm text-stone-500 font-mono uppercase tracking-widest">Coach Active</div>
         </div>
-        <div className={`text-xl font-mono ${timeLeft <= 10 ? 'text-amber-600' : 'text-stone-900'}`}>{Math.floor(timeLeft/60)}:{(timeLeft%60).toString().padStart(2,'0')}</div>
+        <div className="flex items-center gap-4">
+          <div className={`text-sm font-mono ${getWpmColor(liveWpm)}`}>{liveWpm > 0 ? `${liveWpm} wpm` : '— wpm'}</div>
+          <div className={`text-xl font-mono ${timeLeft <= 10 ? 'text-amber-600' : 'text-stone-900'}`}>{Math.floor(timeLeft/60)}:{(timeLeft%60).toString().padStart(2,'0')}</div>
+        </div>
       </div>
       
       <div className="flex-1 flex items-center justify-center relative w-full">
