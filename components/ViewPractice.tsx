@@ -1,10 +1,11 @@
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { ArrowLeft, Eye, EyeOff } from 'lucide-react';
+import { ArrowLeft, Check, Eye, EyeOff } from 'lucide-react';
 import { FadeTransition } from './FadeTransition.tsx';
 import { PitchOption, SessionResult, AgentMode } from '../types.ts';
 import { useRhetor } from '../contexts/RhetorContext.tsx';
 import { useRhetorStore } from '../stores/useRhetorStore.ts';
+import { createTeleprompterMatcher } from '../src/lib/teleprompter_matcher.ts';
 
 interface ViewPracticeProps {
   pitchOption: PitchOption | null;
@@ -19,7 +20,7 @@ const getWpmColor = (wpm: number): string => {
 };
 
 export const ViewPractice: React.FC<ViewPracticeProps> = ({ pitchOption, onEnd }) => {
-  const { setMode, isConnected, isSpeaking, talkingPoints, aiResponse } = useRhetor();
+  const { setMode, isConnected, isSpeaking, talkingPoints, aiResponse, lastTranscript } = useRhetor();
   const liveWpm = useRhetorStore((s) => s.currentMetrics?.wpm ?? 0);
   const fillerCount = useRhetorStore((s) => s.currentMetrics?.fillerCount ?? 0);
   const recentFillerWord = useRhetorStore((s) => s.recentFillerWord);
@@ -27,6 +28,11 @@ export const ViewPractice: React.FC<ViewPracticeProps> = ({ pitchOption, onEnd }
   const duration = pitchOption?.durationSeconds || 120;
   const [timeLeft, setTimeLeft] = useState(duration);
   const [stream, setStream] = useState<MediaStream | null>(null);
+
+  // ── Teleprompter matcher (auto-advance) ──────────────────────────
+  const matcherRef = useRef(createTeleprompterMatcher());
+  const prevTranscriptLenRef = useRef(0);
+  const [allCovered, setAllCovered] = useState(false);
   
   // Flash animation when a new filler is detected
   useEffect(() => {
@@ -57,6 +63,35 @@ export const ViewPractice: React.FC<ViewPracticeProps> = ({ pitchOption, onEnd }
   const [prompterIndex, setPrompterIndex] = useState(0);
   const [showPrompter, setShowPrompter] = useState(true);
   const videoRef = useRef<HTMLVideoElement>(null);
+
+  // Initialize matcher when talking points change
+  useEffect(() => {
+    if (talkingPoints.length > 0) {
+      matcherRef.current = createTeleprompterMatcher();
+      matcherRef.current.setBullets(talkingPoints);
+      prevTranscriptLenRef.current = 0;
+      setPrompterIndex(0);
+      setAllCovered(false);
+
+      matcherRef.current.onAdvance((newIndex: number) => {
+        setPrompterIndex(newIndex);
+        if (newIndex >= talkingPoints.length - 1) {
+          setAllCovered(true);
+        }
+      });
+    }
+  }, [talkingPoints]);
+
+  // Feed transcript delta to the matcher
+  useEffect(() => {
+    if (!lastTranscript) return;
+    const prev = prevTranscriptLenRef.current;
+    if (lastTranscript.length > prev) {
+      const delta = lastTranscript.slice(prev);
+      matcherRef.current.feedTranscript(delta);
+      prevTranscriptLenRef.current = lastTranscript.length;
+    }
+  }, [lastTranscript]);
 
   // Set mode once when connected
   const modeSetRef = useRef(false);
@@ -172,20 +207,49 @@ export const ViewPractice: React.FC<ViewPracticeProps> = ({ pitchOption, onEnd }
           
           {/* TELEPROMPTER OVERLAY */}
           {talkingPoints && talkingPoints.length > 0 && showPrompter && (
-              <div 
+              <div
                 onClick={handlePrompterClick}
-                className="absolute bottom-[10%] left-0 right-0 mx-auto max-w-xl bg-black/60 backdrop-blur-md p-6 rounded-lg cursor-pointer hover:bg-black/70 transition-colors border-l-4 border-emerald-500"
+                className="absolute bottom-[10%] left-0 right-0 mx-auto max-w-xl bg-black/60 backdrop-blur-md rounded-lg cursor-pointer hover:bg-black/70 transition-colors overflow-hidden"
               >
-                 <div className="space-y-4">
-                     <div className="text-white text-2xl font-medium serif leading-snug">
-                         {talkingPoints[prompterIndex]}
-                     </div>
-                     {prompterIndex < talkingPoints.length - 1 && (
-                         <div className="text-white/40 text-sm truncate">
-                             Next: {talkingPoints[prompterIndex + 1]}
-                         </div>
-                     )}
-                 </div>
+                {/* Progress bar */}
+                <div className="px-5 pt-4 pb-2 flex items-center justify-between">
+                  <span className="text-white/50 text-xs font-mono tracking-wider uppercase">
+                    {Math.min(prompterIndex + (allCovered ? 1 : 0), talkingPoints.length)}/{talkingPoints.length} points covered
+                  </span>
+                  {allCovered && (
+                    <span className="text-emerald-400 text-xs font-mono tracking-wider uppercase flex items-center gap-1">
+                      <Check className="w-3 h-3" /> All points covered!
+                    </span>
+                  )}
+                </div>
+
+                <div className="px-5 pb-5 space-y-3">
+                  {/* Completed bullets (show last completed if any) */}
+                  {prompterIndex > 0 && (
+                    <div className="flex items-start gap-2 text-white/30 text-sm leading-snug transition-all duration-500">
+                      <Check className="w-4 h-4 mt-0.5 shrink-0 text-emerald-500/60" />
+                      <span className="line-through decoration-white/20">
+                        {talkingPoints[prompterIndex - 1]}
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Current bullet — large & bright */}
+                  <div className="flex items-start gap-2 border-l-4 border-emerald-500 pl-3 transition-all duration-500">
+                    <span className="text-white text-xl font-medium serif leading-snug">
+                      {talkingPoints[prompterIndex]}
+                    </span>
+                  </div>
+
+                  {/* Next bullet — smaller & dimmed */}
+                  {prompterIndex < talkingPoints.length - 1 && (
+                    <div className="flex items-start gap-2 pl-5 transition-all duration-500">
+                      <span className="text-white/35 text-sm leading-snug truncate">
+                        {talkingPoints[prompterIndex + 1]}
+                      </span>
+                    </div>
+                  )}
+                </div>
               </div>
           )}
         </div>
