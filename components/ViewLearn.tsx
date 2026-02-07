@@ -2,7 +2,9 @@
 import React, { useState } from 'react';
 import { FadeTransition } from './FadeTransition.tsx';
 import { AppView, LearningGuide } from '../types.ts';
-import { ArrowLeft, ChevronRight, Mic } from 'lucide-react';
+import { ArrowLeft, ChevronRight, Mic, Zap, BookOpen } from 'lucide-react';
+import { LessonCard, LessonComplete, SAMPLE_LESSONS, MicroLesson } from './MicroLessonCard.tsx';
+import { useRhetor } from '../contexts/RhetorContext.tsx';
 
 interface ViewLearnProps {
   onBack: () => void;
@@ -138,19 +140,127 @@ const PILLARS: LearningGuide[] = [
 ];
 
 export const ViewLearn: React.FC<ViewLearnProps> = ({ onBack, onPractice }) => {
+  const { addDrachmas, completeLesson } = useRhetor();
   const [selectedPillar, setSelectedPillar] = useState<LearningGuide | null>(null);
+  const [activeMicroLesson, setActiveMicroLesson] = useState<MicroLesson | null>(null);
+  const [showComplete, setShowComplete] = useState<{ score: number; xp: number; title: string } | null>(null);
+  const [viewMode, setViewMode] = useState<'pillars' | 'quick'>('pillars');
+
+  const handleMicroLessonComplete = (score: number, xp: number) => {
+    addDrachmas(xp);
+    if (activeMicroLesson) {
+      completeLesson(activeMicroLesson.id);
+      setShowComplete({ score, xp, title: activeMicroLesson.title });
+      setActiveMicroLesson(null);
+    }
+  };
+
+  // If showing completion screen
+  if (showComplete) {
+    return (
+      <FadeTransition className="flex flex-col min-h-screen p-6 max-w-3xl mx-auto w-full bg-stone-50 text-stone-900 items-center justify-center">
+        <LessonComplete
+          score={showComplete.score}
+          xpEarned={showComplete.xp}
+          lessonTitle={showComplete.title}
+          onContinue={() => setShowComplete(null)}
+        />
+      </FadeTransition>
+    );
+  }
+
+  // If in micro-lesson
+  if (activeMicroLesson) {
+    return (
+      <FadeTransition className="flex flex-col min-h-screen p-6 max-w-3xl mx-auto w-full bg-stone-50 text-stone-900">
+        <header className="flex items-center justify-between mb-8">
+          <button 
+            onClick={() => setActiveMicroLesson(null)} 
+            className="text-stone-400 hover:text-stone-900 transition-colors"
+          >
+            <ArrowLeft className="w-6 h-6" />
+          </button>
+          <h1 className="text-sm tracking-widest text-stone-500 uppercase">Quick Lesson</h1>
+          <div className="w-6" />
+        </header>
+        <div className="flex-1 flex items-center justify-center">
+          <LessonCard
+            lesson={activeMicroLesson}
+            onComplete={handleMicroLessonComplete}
+          />
+        </div>
+      </FadeTransition>
+    );
+  }
 
   return (
     <FadeTransition className="flex flex-col min-h-screen p-6 max-w-3xl mx-auto w-full bg-stone-50 text-stone-900">
-      <header className="flex items-center justify-between mb-12">
+      <header className="flex items-center justify-between mb-8">
         <button onClick={onBack} className="text-stone-400 hover:text-stone-900 transition-colors">
           <ArrowLeft className="w-6 h-6" />
         </button>
-        <h1 className="text-sm tracking-widest text-stone-500 uppercase">The Five Pillars</h1>
+        <h1 className="text-sm tracking-widest text-stone-500 uppercase">Learn</h1>
         <div className="w-6" /> 
       </header>
 
-      {!selectedPillar ? (
+      {/* Tab Switcher */}
+      <div className="flex gap-2 mb-8 p-1 bg-stone-100 rounded-lg">
+        <button
+          onClick={() => setViewMode('pillars')}
+          className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-all flex items-center justify-center gap-2 ${
+            viewMode === 'pillars' ? 'bg-white text-stone-900 shadow-sm' : 'text-stone-500'
+          }`}
+        >
+          <BookOpen className="w-4 h-4" />
+          The Pillars
+        </button>
+        <button
+          onClick={() => setViewMode('quick')}
+          className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-all flex items-center justify-center gap-2 ${
+            viewMode === 'quick' ? 'bg-white text-stone-900 shadow-sm' : 'text-stone-500'
+          }`}
+        >
+          <Zap className="w-4 h-4" />
+          Quick Exercises
+        </button>
+      </div>
+
+      {viewMode === 'quick' ? (
+        /* Quick Exercises - Duolingo Style */
+        <div className="space-y-4">
+          <p className="text-stone-500 text-sm mb-6">
+            Bite-sized lessons. Practice one skill at a time.
+          </p>
+          {SAMPLE_LESSONS.map((lesson) => (
+            <button
+              key={lesson.id}
+              onClick={() => setActiveMicroLesson(lesson)}
+              className="w-full p-4 bg-white rounded-xl border border-stone-200 text-left hover:border-stone-300 hover:shadow-md transition-all group"
+            >
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className={`text-xs uppercase tracking-wider px-2 py-0.5 rounded ${
+                    lesson.pillar === 'ethos' ? 'bg-blue-100 text-blue-600' :
+                    lesson.pillar === 'pathos' ? 'bg-rose-100 text-rose-600' :
+                    'bg-amber-100 text-amber-600'
+                  }`}>
+                    {lesson.pillar}
+                  </span>
+                  <h3 className="text-lg font-medium text-stone-900 mt-2">{lesson.title}</h3>
+                  <p className="text-sm text-stone-500">{lesson.description}</p>
+                </div>
+                <div className="flex flex-col items-end gap-2">
+                  <div className="flex items-center gap-1 text-amber-500 text-sm font-medium">
+                    <Zap className="w-4 h-4" />
+                    {lesson.xpReward} XP
+                  </div>
+                  <span className="text-xs text-stone-400">{lesson.tasks.length} tasks</span>
+                </div>
+              </div>
+            </button>
+          ))}
+        </div>
+      ) : !selectedPillar ? (
         <div className="grid gap-0 divide-y divide-stone-200 border-t border-b border-stone-200">
           <div className="py-8 text-center">
              <h2 className="text-4xl serif font-light text-stone-900 mb-2">Ancient wisdom for modern speakers</h2>

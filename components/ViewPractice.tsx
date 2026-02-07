@@ -38,14 +38,27 @@ export const ViewPractice: React.FC<ViewPracticeProps> = ({ pitchOption, onEnd }
   
   // Start local camera for self-view
   useEffect(() => {
-    navigator.mediaDevices.getUserMedia({ video: true }).then(s => {
+    let localStream: MediaStream | null = null;
+    let mounted = true;
+
+    navigator.mediaDevices.getUserMedia({ video: true })
+      .then(s => {
+        if (!mounted) {
+          s.getTracks().forEach(t => t.stop());
+          return;
+        }
+        localStream = s;
         setStream(s);
         if (videoRef.current) videoRef.current.srcObject = s;
-    });
+      })
+      .catch(console.error);
 
     return () => {
-        if (stream) stream.getTracks().forEach(t => t.stop());
-    }
+      mounted = false;
+      if (localStream) {
+        localStream.getTracks().forEach(t => t.stop());
+      }
+    };
   }, []);
 
   const finishSession = () => {

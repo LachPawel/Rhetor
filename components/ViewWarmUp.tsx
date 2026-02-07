@@ -38,18 +38,36 @@ export const ViewWarmUp: React.FC<ViewWarmUpProps> = ({ onComplete, onExit }) =>
 
   // Camera Logic for BODY stage only
   useEffect(() => {
-    if (currentStage.id === 'body') {
-        navigator.mediaDevices.getUserMedia({ video: true }).then(setStream).catch(console.error);
-    } else {
-        stream?.getTracks().forEach(t => t.stop());
-        setStream(null);
-    }
-    return () => stream?.getTracks().forEach(t => t.stop());
-  }, [currentStage.id]);
+    let localStream: MediaStream | null = null;
+    let mounted = true;
 
-  useEffect(() => {
-      if (videoRef.current && stream) videoRef.current.srcObject = stream;
-  }, [stream]);
+    if (currentStage.id === 'body') {
+      navigator.mediaDevices.getUserMedia({ video: true })
+        .then(s => {
+          if (!mounted) {
+            s.getTracks().forEach(t => t.stop());
+            return;
+          }
+          localStream = s;
+          setStream(s);
+          if (videoRef.current) videoRef.current.srcObject = s;
+        })
+        .catch(console.error);
+    } else {
+      // Not body stage - ensure stream is stopped
+      if (stream) {
+        stream.getTracks().forEach(t => t.stop());
+        setStream(null);
+      }
+    }
+
+    return () => {
+      mounted = false;
+      if (localStream) {
+        localStream.getTracks().forEach(t => t.stop());
+      }
+    };
+  }, [currentStage.id]);
 
   const handleNext = () => {
     if (stageIndex < STAGES.length - 1) {
