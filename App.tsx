@@ -460,8 +460,8 @@ function AppContent() {
         {localView === AppView.REVIEW && (
           <ViewReview
             key="review"
-            result={sessionResult}
             onReset={() => handleViewChange(AppView.HOME)}
+            onPracticeAgain={() => handleViewChange(AppView.PREP)}
           />
         )}
       </AnimatePresence>
