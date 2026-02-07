@@ -69,15 +69,20 @@ export const ViewPractice: React.FC<ViewPracticeProps> = ({ pitchOption, onEnd }
     if (talkingPoints.length > 0) {
       matcherRef.current = createTeleprompterMatcher();
       matcherRef.current.setBullets(talkingPoints);
-      prevTranscriptLenRef.current = 0;
+      // Snap to current transcript length so we only match NEW speech, not old session text
+      prevTranscriptLenRef.current = lastTranscript?.length ?? 0;
       setPrompterIndex(0);
       setAllCovered(false);
 
       matcherRef.current.onAdvance((newIndex: number) => {
-        setPrompterIndex(newIndex);
-        if (newIndex >= talkingPoints.length - 1) {
-          setAllCovered(true);
-        }
+        // Only advance if matcher is ahead of (or equal to) current manual position
+        setPrompterIndex(prev => {
+          const next = Math.max(prev, newIndex);
+          if (next >= talkingPoints.length - 1) {
+            setAllCovered(true);
+          }
+          return next;
+        });
       });
     }
   }, [talkingPoints]);
