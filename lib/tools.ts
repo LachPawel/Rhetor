@@ -17,7 +17,8 @@ export const navigateToTool: FunctionDeclaration = {
 Available views:
 - HOME: Main dashboard with daily challenge and continue learning
 - WARMUP: Pre-practice breathing and voice exercises
-- PREP: Pitch preparation and bullet points
+- INPUT: Content preparation screen (paste text, pick template, or start AI interview)
+- PREP: AI-guided pitch interview to extract talking points
 - PRACTICE: Live pitch practice session
 - REVIEW: Post-practice performance review
 - LESSON: Current lesson content
@@ -32,7 +33,7 @@ IMPORTANT: During an active practice session, navigation will require user confi
       view: {
         type: Type.STRING,
         description: 'The view to navigate to',
-        enum: ['HOME', 'WARMUP', 'PREP', 'PRACTICE', 'REVIEW', 'LESSON', 'AGORA', 'SYMPOSIUM', 'PROFILE'],
+        enum: ['HOME', 'WARMUP', 'INPUT', 'PREP', 'PRACTICE', 'REVIEW', 'LESSON', 'AGORA', 'SYMPOSIUM', 'PROFILE'],
       },
       context: {
         type: Type.OBJECT,
