@@ -147,8 +147,7 @@ export function buildAnalystContext(
 // ============================================================================
 
 export const VOICE_CONFIG = {
-  voiceName: 'Fenrir', // Deep, authoritative voice
-  // Alternative voices: 'Puck' (lighter), 'Charon' (darker)
+  voiceName: 'Algieba',
 };
 
 // ============================================================================

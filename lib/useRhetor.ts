@@ -17,7 +17,7 @@ import { getToolHandler } from './tool_handler';
 import { useFillerDetector } from './filler_detector';
 import { AudioStreamer } from './audio_streamer';
 import { AudioRecorder } from './audio_recorder';
-import { RHETOR_SYSTEM_INSTRUCTION, buildWelcomerContext, buildLessonContext, buildWarmupContext, buildAnalystContext } from './prompts';
+import { RHETOR_SYSTEM_INSTRUCTION, VOICE_CONFIG, buildWelcomerContext, buildLessonContext, buildWarmupContext, buildAnalystContext } from './prompts';
 import type { AIMode } from '../stores/useRhetorStore';
 import { Modality } from '@google/genai';
 
@@ -232,7 +232,7 @@ export function useRhetor(options: UseRhetorOptions): UseRhetorReturn {
       responseModalities: [Modality.AUDIO],
       speechConfig: {
         voiceConfig: {
-          prebuiltVoiceConfig: { voiceName: 'Fenrir' },
+          prebuiltVoiceConfig: { voiceName: VOICE_CONFIG.voiceName },
         },
       },
       inputAudioTranscription: {},
