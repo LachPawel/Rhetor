@@ -79,11 +79,17 @@ const MIC_SAMPLE_RATE = 16000;   // Gemini input
 export function useRhetor(options: UseRhetorOptions): UseRhetorReturn {
   const { apiKey, autoConnect = false, enableFillerDetection = true } = options;
   
+  /** Strip Gemini control tokens (e.g. <ctrl46>, <ctrl97>) from transcription text. */
+  const sanitizeTranscription = (text: string): string =>
+    text.replace(/<ctrl\d+>/gi, '').replace(/\s{2,}/g, ' ').trim();
+
   // Refs
   const clientRef = useRef<GeminiLiveClient | null>(null);
   const streamerRef = useRef<AudioStreamer | null>(null);
   const recorderRef = useRef<AudioRecorder | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
+  const finalizedTranscriptRef = useRef('');
+  const finalizedAiTranscriptRef = useRef('');
   
   // Local state
   const [userTranscript, setUserTranscript] = useState('');
@@ -178,23 +184,36 @@ export function useRhetor(options: UseRhetorOptions): UseRhetorReturn {
         streamerRef.current?.stop();
       });
       
-      client.on('inputTranscription', (text: string, isFinal: boolean) => {
-        setUserTranscript(prev => isFinal ? text : prev + text);
-        
+      client.on('inputTranscription', (text: string) => {
+        // Gemini Live API sends transcription fragments without an isFinal flag.
+        // Each event carries a small text fragment — always accumulate.
+        // Strip control tokens like <ctrl46> that leak from the audio model.
+        const trimmed = sanitizeTranscription(text);
+        if (!trimmed) return;
+
+        const separator = finalizedTranscriptRef.current ? ' ' : '';
+        finalizedTranscriptRef.current += separator + trimmed;
+        setUserTranscript(finalizedTranscriptRef.current);
+
         // Process for fillers
-        if (enableFillerDetection && isFinal) {
-          const detections = processTranscript(text);
+        if (enableFillerDetection) {
+          const detections = processTranscript(trimmed);
           detections.forEach(d => addFillerEvent(d.word, d.position));
         }
-        
-        // Update store transcript
-        if (isFinal) {
-          updateTranscript(text);
-        }
+
+        // Update store with full accumulated transcript
+        updateTranscript(finalizedTranscriptRef.current);
       });
       
       client.on('outputTranscription', (text: string) => {
-        setAiTranscript(text);
+        // Same as input: always accumulate each fragment.
+        // Strip control tokens like <ctrl46> that leak from the audio model.
+        const trimmed = sanitizeTranscription(text);
+        if (!trimmed) return;
+
+        const separator = finalizedAiTranscriptRef.current ? ' ' : '';
+        finalizedAiTranscriptRef.current += separator + trimmed;
+        setAiTranscript(finalizedAiTranscriptRef.current);
       });
       
       client.on('error', (e: Error) => {
@@ -324,7 +343,10 @@ export function useRhetor(options: UseRhetorOptions): UseRhetorReturn {
       await recorderRef.current.start();
       setIsListening(true);
       setIsListeningStore(true);
+      finalizedTranscriptRef.current = '';
+      finalizedAiTranscriptRef.current = '';
       setUserTranscript('');
+      setAiTranscript('');
       
       return true;
     } catch (e) {
