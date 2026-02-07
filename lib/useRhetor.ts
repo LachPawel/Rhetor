@@ -408,6 +408,14 @@ export function useRhetor(options: UseRhetorOptions): UseRhetorReturn {
           (context?.stepNumber as number) ?? 0
         );
         break;
+      case 'coach_practice':
+        contextJson = JSON.stringify({
+          mode: 'coach_practice',
+          user,
+          talkingPoints: context?.talkingPoints ?? useRhetorStore.getState().talkingPoints,
+          pitchTopic: useRhetorStore.getState().pitchTopic,
+        });
+        break;
       case 'analyst':
         contextJson = buildAnalystContext(user, {
           fillerCount: useRhetorStore.getState().currentMetrics?.fillerCount ?? 0,
@@ -415,6 +423,7 @@ export function useRhetor(options: UseRhetorOptions): UseRhetorReturn {
           clarity: useRhetorStore.getState().currentMetrics?.clarity ?? 100,
           duration: useRhetorStore.getState().currentMetrics?.duration ?? 0,
           transcript: useRhetorStore.getState().transcript,
+          talkingPoints: useRhetorStore.getState().talkingPoints,
         });
         break;
       default:
