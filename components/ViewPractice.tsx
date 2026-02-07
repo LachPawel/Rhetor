@@ -21,6 +21,8 @@ const getWpmColor = (wpm: number): string => {
 
 export const ViewPractice: React.FC<ViewPracticeProps> = ({ pitchOption, onEnd }) => {
   const { setMode, isConnected, isSpeaking, talkingPoints, aiResponse, lastTranscript } = useRhetor();
+  const startSession = useRhetorStore((s) => s.startSession);
+  const endSession = useRhetorStore((s) => s.endSession);
   const liveWpm = useRhetorStore((s) => s.currentMetrics?.wpm ?? 0);
   const fillerCount = useRhetorStore((s) => s.currentMetrics?.fillerCount ?? 0);
   const recentFillerWord = useRhetorStore((s) => s.recentFillerWord);
@@ -28,6 +30,12 @@ export const ViewPractice: React.FC<ViewPracticeProps> = ({ pitchOption, onEnd }
   const duration = pitchOption?.durationSeconds || 120;
   const [timeLeft, setTimeLeft] = useState(duration);
   const [stream, setStream] = useState<MediaStream | null>(null);
+
+  // ── Start metrics session on mount ───────────────────────────────
+  useEffect(() => {
+    startSession();
+    return () => { endSession(); };
+  }, [startSession, endSession]);
 
   // ── Teleprompter matcher (auto-advance) ──────────────────────────
   const matcherRef = useRef(createTeleprompterMatcher());
@@ -144,6 +152,8 @@ export const ViewPractice: React.FC<ViewPracticeProps> = ({ pitchOption, onEnd }
   const finishSession = useCallback(() => {
     if (sessionEndedRef.current) return;
     sessionEndedRef.current = true;
+    // Finalize the metrics session so endTime & duration are set
+    endSession();
     const actualElapsed = Math.floor((Date.now() - statsRef.current.startTime) / 1000);
     onEnd({
       durationSeconds: actualElapsed,
@@ -153,7 +163,7 @@ export const ViewPractice: React.FC<ViewPracticeProps> = ({ pitchOption, onEnd }
       wpm: useRhetorStore.getState().currentMetrics?.wpm ?? 0,
       targetDurationSeconds: duration
     });
-  }, [onEnd, duration]);
+  }, [onEnd, duration, endSession]);
 
   // Keep a ref to finishSession so the timer interval always calls the latest version
   const finishRef = useRef(finishSession);

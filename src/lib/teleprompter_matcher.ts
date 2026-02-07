@@ -23,11 +23,11 @@ const STOP_WORDS = new Set([
   "think","know", "come", "came", "get",  "got",  "say",  "says",
 ]);
 
-const MIN_WORD_LENGTH = 4;
+const MIN_WORD_LENGTH = 3;
 const WINDOW_SIZE = 50;
-const MATCH_THRESHOLD = 0.6;
+const MATCH_THRESHOLD = 0.5;
 const FUZZY_PREFIX_LENGTH = 5;
-const MIN_KEY_TERMS = 2;
+const MIN_KEY_TERMS = 1;
 const MAX_KEY_TERMS = 4;
 
 // ── Helpers ───────────────────────────────────────────────────────────
@@ -118,7 +118,7 @@ export function createTeleprompterMatcher(): TeleprompterMatcher {
 
     const terms = bulletKeyTerms[currentIndex];
     if (terms.length === 0) {
-      advance();
+      // No extractable key terms — leave for manual advance
       return;
     }
 
