@@ -21,10 +21,22 @@ const getWpmColor = (wpm: number): string => {
 export const ViewPractice: React.FC<ViewPracticeProps> = ({ pitchOption, onEnd }) => {
   const { setMode, isConnected, isSpeaking, talkingPoints, aiResponse } = useRhetor();
   const liveWpm = useRhetorStore((s) => s.currentMetrics?.wpm ?? 0);
+  const fillerCount = useRhetorStore((s) => s.currentMetrics?.fillerCount ?? 0);
+  const recentFillerWord = useRhetorStore((s) => s.recentFillerWord);
+  const [fillerFlash, setFillerFlash] = useState(false);
   const duration = pitchOption?.durationSeconds || 120;
   const [timeLeft, setTimeLeft] = useState(duration);
   const [stream, setStream] = useState<MediaStream | null>(null);
   
+  // Flash animation when a new filler is detected
+  useEffect(() => {
+    if (recentFillerWord) {
+      setFillerFlash(true);
+      const timeout = setTimeout(() => setFillerFlash(false), 600);
+      return () => clearTimeout(timeout);
+    }
+  }, [recentFillerWord, fillerCount]);
+
   // Track the last *complete* AI coach message (not streaming text)
   const [lastCoachMessage, setLastCoachMessage] = useState<string | null>(null);
   const prevSpeakingRef = useRef(isSpeaking);
@@ -139,6 +151,16 @@ export const ViewPractice: React.FC<ViewPracticeProps> = ({ pitchOption, onEnd }
           <div className="text-sm text-stone-500 font-mono uppercase tracking-widest">Coach Active</div>
         </div>
         <div className="flex items-center gap-4">
+          <div
+            className={`text-sm font-mono transition-colors duration-300 ${
+              fillerFlash ? 'text-red-500' : fillerCount > 0 ? 'text-amber-500' : 'text-stone-400'
+            }`}
+          >
+            <span className={`inline-block transition-transform duration-300 ${fillerFlash ? 'scale-125' : 'scale-100'}`}>
+              {fillerCount > 0 ? `${fillerCount} filler${fillerCount !== 1 ? 's' : ''}` : '0 fillers'}
+            </span>
+          </div>
+          <div className="w-px h-4 bg-stone-200" />
           <div className={`text-sm font-mono ${getWpmColor(liveWpm)}`}>{liveWpm > 0 ? `${liveWpm} wpm` : '— wpm'}</div>
           <div className={`text-xl font-mono ${timeLeft <= 10 ? 'text-amber-600' : 'text-stone-900'}`}>{Math.floor(timeLeft/60)}:{(timeLeft%60).toString().padStart(2,'0')}</div>
         </div>
