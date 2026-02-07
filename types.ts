@@ -7,7 +7,8 @@ export enum AppView {
   SYMPOSIUM = 'SYMPOSIUM',
   PROFILE = 'PROFILE',
   WARMUP = 'WARMUP',
-  PREP = 'PREP', // Pitch Builder
+  INPUT = 'INPUT', // Content Preparation
+  PREP = 'PREP', // Pitch Builder (AI Interview)
   PRACTICE = 'PRACTICE',
   REVIEW = 'REVIEW',
   LESSON = 'LESSON',

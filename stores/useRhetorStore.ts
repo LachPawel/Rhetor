@@ -138,10 +138,16 @@ interface AISlice {
 interface PitchSlice {
   talkingPoints: string[];
   pitchTopic: string;
+  pitchHook: string;
+  pitchClosing: string;
+  suggestedDuration: number;
   
   // Actions
   setTalkingPoints: (points: string[]) => void;
   setPitchTopic: (topic: string) => void;
+  setPitchHook: (hook: string) => void;
+  setPitchClosing: (closing: string) => void;
+  setSuggestedDuration: (duration: number) => void;
 }
 
 interface UISlice {
@@ -594,6 +600,9 @@ export const useRhetorStore = create<RhetorStore>()(
       // ========================================================================
       talkingPoints: [],
       pitchTopic: '',
+      pitchHook: '',
+      pitchClosing: '',
+      suggestedDuration: 60,
 
       setTalkingPoints: (points: string[]) => {
         set((state) => {
@@ -604,6 +613,24 @@ export const useRhetorStore = create<RhetorStore>()(
       setPitchTopic: (topic: string) => {
         set((state) => {
           state.pitchTopic = topic;
+        });
+      },
+
+      setPitchHook: (hook: string) => {
+        set((state) => {
+          state.pitchHook = hook;
+        });
+      },
+
+      setPitchClosing: (closing: string) => {
+        set((state) => {
+          state.pitchClosing = closing;
+        });
+      },
+
+      setSuggestedDuration: (duration: number) => {
+        set((state) => {
+          state.suggestedDuration = duration;
         });
       },
 

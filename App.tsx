@@ -16,6 +16,7 @@ import { ViewSymposium } from './components/ViewSymposium';
 import { ViewProfile } from './components/ViewProfile';
 import { ViewLesson } from './components/ViewLesson';
 import { ViewWarmUp } from './components/ViewWarmUp';
+import { ViewInput } from './components/ViewInput';
 import { ViewPrep } from './components/ViewPrep';
 import { ViewPractice } from './components/ViewPractice';
 import { ViewReview } from './components/ViewReview';
@@ -298,6 +299,7 @@ function AppContent() {
       SYMPOSIUM: AppView.SYMPOSIUM,
       PROFILE: AppView.PROFILE,
       WARMUP: AppView.WARMUP,
+      INPUT: AppView.INPUT,
       PREP: AppView.PREP,
       PRACTICE: AppView.PRACTICE,
       REVIEW: AppView.REVIEW,
@@ -318,6 +320,7 @@ function AppContent() {
   // Full screen modes hide the bottom nav
   const isFullScreen = [
     AppView.WARMUP,
+    AppView.INPUT,
     AppView.PREP,
     AppView.PRACTICE,
     AppView.REVIEW,
@@ -441,11 +444,18 @@ function AppContent() {
           />
         )}
 
+        {localView === AppView.INPUT && (
+          <ViewInput
+            key="input"
+            onChangeView={handleViewChange}
+          />
+        )}
+
         {localView === AppView.PREP && (
           <ViewPrep
             key="prep"
             onBegin={() => handleViewChange(AppView.PRACTICE)}
-            onBack={() => handleViewChange(AppView.HOME)}
+            onBack={() => handleViewChange(AppView.INPUT)}
           />
         )}
 

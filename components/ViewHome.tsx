@@ -60,12 +60,12 @@ export const ViewHome: React.FC<ViewHomeProps> = ({ onChangeView }) => {
 
         {/* Quick Actions Grid */}
         <div className="grid grid-cols-2 gap-4">
-            <button onClick={() => onChangeView(AppView.PREP)} className="p-4 bg-white border border-stone-200 rounded-lg shadow-sm hover:border-stone-400 transition-all text-left">
+            <button onClick={() => onChangeView(AppView.INPUT)} className="p-4 bg-white border border-stone-200 rounded-lg shadow-sm hover:border-stone-400 transition-all text-left">
                 <div className="w-8 h-8 rounded-full bg-stone-100 flex items-center justify-center mb-3">
                     <Mic className="w-4 h-4 text-stone-600" />
                 </div>
                 <h4 className="font-serif text-lg">Build Pitch</h4>
-                <p className="text-xs text-stone-500 mt-1">AI Interview Mode</p>
+                <p className="text-xs text-stone-500 mt-1">Prepare Your Content</p>
             </button>
 
             <button onClick={() => onChangeView(AppView.PRACTICE)} className="p-4 bg-white border border-stone-200 rounded-lg shadow-sm hover:border-stone-400 transition-all text-left">
