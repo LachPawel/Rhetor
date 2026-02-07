@@ -1,6 +1,6 @@
 
-import React, { useEffect, useRef, useState } from 'react';
-import { Mic, Eye, EyeOff } from 'lucide-react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { ArrowLeft, Eye, EyeOff } from 'lucide-react';
 import { FadeTransition } from './FadeTransition.tsx';
 import { PitchOption, SessionResult, AgentMode } from '../types.ts';
 import { useRhetor } from '../contexts/RhetorContext.tsx';
@@ -19,12 +19,22 @@ const getWpmColor = (wpm: number): string => {
 };
 
 export const ViewPractice: React.FC<ViewPracticeProps> = ({ pitchOption, onEnd }) => {
-  const { setMode, isConnected, talkingPoints, aiResponse } = useRhetor();
+  const { setMode, isConnected, isSpeaking, talkingPoints, aiResponse } = useRhetor();
   const liveWpm = useRhetorStore((s) => s.currentMetrics?.wpm ?? 0);
-  const liveFillerCount = useRhetorStore((s) => s.currentMetrics?.fillerCount ?? 0);
   const duration = pitchOption?.durationSeconds || 120;
   const [timeLeft, setTimeLeft] = useState(duration);
   const [stream, setStream] = useState<MediaStream | null>(null);
+  
+  // Track the last *complete* AI coach message (not streaming text)
+  const [lastCoachMessage, setLastCoachMessage] = useState<string | null>(null);
+  const prevSpeakingRef = useRef(isSpeaking);
+  useEffect(() => {
+    // When AI stops speaking (transition from speaking → not speaking), snapshot the response
+    if (prevSpeakingRef.current && !isSpeaking && aiResponse) {
+      setLastCoachMessage(aiResponse);
+    }
+    prevSpeakingRef.current = isSpeaking;
+  }, [isSpeaking, aiResponse]);
   
   // Stats Ref
   const statsRef = useRef({
@@ -58,7 +68,6 @@ export const ViewPractice: React.FC<ViewPracticeProps> = ({ pitchOption, onEnd }
         }
         localStream = s;
         setStream(s);
-        if (videoRef.current) videoRef.current.srcObject = s;
       })
       .catch(console.error);
 
@@ -70,31 +79,47 @@ export const ViewPractice: React.FC<ViewPracticeProps> = ({ pitchOption, onEnd }
     };
   }, []);
 
-  const finishSession = () => {
+  // Wire srcObject once the <video> element renders and stream is available
+  useEffect(() => {
+    if (videoRef.current && stream) {
+      videoRef.current.srcObject = stream;
+    }
+  }, [stream]);
+
+  // Guard against double-firing finishSession
+  const sessionEndedRef = useRef(false);
+
+  const finishSession = useCallback(() => {
+    if (sessionEndedRef.current) return;
+    sessionEndedRef.current = true;
     const actualElapsed = Math.floor((Date.now() - statsRef.current.startTime) / 1000);
     onEnd({
       durationSeconds: actualElapsed,
       postureScore: 0,
       eyeContactScore: 0,
-      fillersCount: liveFillerCount,
-      wpm: liveWpm,
+      fillersCount: useRhetorStore.getState().currentMetrics?.fillerCount ?? 0,
+      wpm: useRhetorStore.getState().currentMetrics?.wpm ?? 0,
       targetDurationSeconds: duration
     });
-  };
+  }, [onEnd, duration]);
+
+  // Keep a ref to finishSession so the timer interval always calls the latest version
+  const finishRef = useRef(finishSession);
+  finishRef.current = finishSession;
 
   useEffect(() => {
     const timer = setInterval(() => {
       setTimeLeft((prev) => {
         if (prev <= 1) {
           clearInterval(timer);
-          finishSession();
+          finishRef.current();
           return 0;
         }
         return prev - 1;
       });
     }, 1000);
     return () => clearInterval(timer);
-  }, []); 
+  }, []);
 
   const handlePrompterClick = () => {
       if (talkingPoints.length > 0) {
@@ -107,7 +132,10 @@ export const ViewPractice: React.FC<ViewPracticeProps> = ({ pitchOption, onEnd }
   return (
     <FadeTransition className="flex flex-col min-h-screen p-6 relative bg-stone-50 text-stone-900">
       <div className="flex justify-between items-start w-full mb-4 z-10">
-        <div className="flex flex-col gap-1">
+        <div className="flex items-center gap-3">
+          <button onClick={finishSession} className="text-stone-400 hover:text-stone-900 transition-colors">
+            <ArrowLeft className="w-5 h-5" />
+          </button>
           <div className="text-sm text-stone-500 font-mono uppercase tracking-widest">Coach Active</div>
         </div>
         <div className="flex items-center gap-4">
@@ -141,9 +169,13 @@ export const ViewPractice: React.FC<ViewPracticeProps> = ({ pitchOption, onEnd }
         </div>
       </div>
       
-      {/* Coach Feedback Floating */}
+      {/* Coach Feedback Floating — only show when AI is NOT actively speaking to avoid streaming text */}
       <div className="absolute bottom-24 left-0 w-full flex justify-center pointer-events-none z-20">
-        {aiResponse && <div className="bg-white/90 backdrop-blur px-8 py-4 rounded-full border border-stone-200 text-stone-900 text-lg serif italic shadow-xl animate-fade-in-up">"{aiResponse}"</div>}
+        {lastCoachMessage && !isSpeaking && (
+          <div className="bg-white/90 backdrop-blur px-8 py-4 rounded-full border border-stone-200 text-stone-900 text-lg serif italic shadow-xl animate-fade-in-up max-w-xl truncate">
+            "{lastCoachMessage}"
+          </div>
+        )}
       </div>
 
       <div className="mt-8 flex justify-between items-center z-10 w-full max-w-4xl mx-auto">

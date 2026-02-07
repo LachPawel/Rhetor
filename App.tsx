@@ -350,8 +350,8 @@ function AppContent() {
   const handlePracticeEnd = useCallback((result: SessionResult) => {
     setSessionResult(result);
     handleViewChange(AppView.REVIEW);
-    rhetor.setMode('analyst');
-  }, [handleViewChange, rhetor]);
+    // Note: ViewReview handles setMode(ANALYST) with context data
+  }, [handleViewChange]);
 
   const handleWarmupComplete = useCallback(() => {
     handleViewChange(AppView.PREP);
