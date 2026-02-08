@@ -3,7 +3,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { FadeTransition } from './FadeTransition.tsx';
 import { AgentMode } from '../types.ts';
 import { useRhetor } from '../contexts/RhetorContext.tsx';
-import { ArrowLeft, Mic, User, Briefcase, Frown, Users, Zap, SkipForward } from 'lucide-react';
+import { ArrowLeft, Briefcase, Frown, Users, Square, Clock, RotateCcw } from 'lucide-react';
 
 interface ViewSimulationProps {
     onBack: () => void;
@@ -19,8 +19,10 @@ export const ViewSimulation: React.FC<ViewSimulationProps> = ({ onBack }) => {
     const { setMode, isConnected, isSpeaking, aiResponse, lastTranscript, connect } = useRhetor();
     const [selectedPersona, setSelectedPersona] = useState<string | null>(null);
     const [isActive, setIsActive] = useState(false);
-    const [stream, setStream] = useState<MediaStream | null>(null);
-    const videoRef = useRef<HTMLVideoElement>(null);
+    const [isFinished, setIsFinished] = useState(false);
+    const [elapsedSeconds, setElapsedSeconds] = useState(0);
+    const [exchanges, setExchanges] = useState(0);
+    const startTimeRef = useRef<number>(0);
 
     // Ensure connection before starting
     const handleStart = async (personaId: string) => {
@@ -41,32 +43,44 @@ export const ViewSimulation: React.FC<ViewSimulationProps> = ({ onBack }) => {
         }
     }, [isActive, selectedPersona, setMode]);
 
-    // Track stream in a ref so cleanup always sees the latest value
-    const streamRef = useRef<MediaStream | null>(null);
-
-    // Camera setup for self-view
+    // Elapsed timer
     useEffect(() => {
-        if (isActive) {
-            navigator.mediaDevices.getUserMedia({ video: true })
-                .then(s => {
-                    streamRef.current = s;
-                    setStream(s);
-                })
-                .catch(console.error);
-        }
-        return () => {
-            streamRef.current?.getTracks().forEach(t => t.stop());
-            streamRef.current = null;
-            setStream(null);
-        };
-    }, [isActive]);
+        if (!isActive || isFinished) return;
+        startTimeRef.current = Date.now();
+        const interval = setInterval(() => {
+            setElapsedSeconds(Math.floor((Date.now() - startTimeRef.current) / 1000));
+        }, 1000);
+        return () => clearInterval(interval);
+    }, [isActive, isFinished]);
 
-    // Assign srcObject once both the stream and the video element exist
+    // Count exchanges (each new AI response = 1 exchange)
+    const prevAiRef = useRef(aiResponse);
     useEffect(() => {
-        if (videoRef.current && stream) {
-            videoRef.current.srcObject = stream;
+        if (isActive && !isFinished && aiResponse && aiResponse !== prevAiRef.current) {
+            prevAiRef.current = aiResponse;
+            setExchanges(e => e + 1);
         }
-    }, [stream]);
+    }, [aiResponse, isActive, isFinished]);
+
+    const handleEnd = () => {
+        setIsFinished(true);
+        setMode(AgentMode.IDLE);
+    };
+
+    const handleRestart = () => {
+        setIsFinished(false);
+        setIsActive(false);
+        setSelectedPersona(null);
+        setElapsedSeconds(0);
+        setExchanges(0);
+        modeSetRef.current = false;
+    };
+
+    const formatTime = (s: number) => {
+        const m = Math.floor(s / 60);
+        const sec = s % 60;
+        return `${m}:${sec.toString().padStart(2, '0')}`;
+    };
 
     const persona = PERSONAS.find(p => p.id === selectedPersona);
 
@@ -106,12 +120,16 @@ export const ViewSimulation: React.FC<ViewSimulationProps> = ({ onBack }) => {
             )}
 
             {/* ── ACTIVE SIMULATION ── */}
-            {isActive && persona && (
+            {isActive && !isFinished && persona && (
                 <div className="flex-1 flex flex-col relative z-10">
                     
-                    {/* Header */}
-                    <div className="p-6 flex justify-center text-stone-500 text-xs font-mono uppercase tracking-widest">
-                        Simulation In Progress • {persona.name}
+                    {/* Header with timer */}
+                    <div className="p-6 flex items-center justify-center gap-6 text-stone-500 text-xs font-mono uppercase tracking-widest">
+                        <span>Simulation • {persona.name}</span>
+                        <span className="flex items-center gap-1.5 text-stone-400">
+                            <Clock className="w-3.5 h-3.5" />
+                            {formatTime(elapsedSeconds)}
+                        </span>
                     </div>
 
                     {/* Main Stage */}
@@ -136,11 +154,6 @@ export const ViewSimulation: React.FC<ViewSimulationProps> = ({ onBack }) => {
                         </div>
                     </div>
 
-                    {/* User Self-View (Corner) */}
-                    <div className="absolute bottom-24 right-6 w-32 aspect-video bg-black rounded-lg overflow-hidden border border-stone-800 shadow-2xl">
-                         <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover transform -scale-x-100" />
-                    </div>
-
                     {/* User Transcript */}
                     {lastTranscript && (
                         <div className="px-8 flex flex-col items-center text-center">
@@ -152,12 +165,66 @@ export const ViewSimulation: React.FC<ViewSimulationProps> = ({ onBack }) => {
                     )}
 
                     {/* AI Feedback / Subtitles */}
-                    <div className="p-8 pb-32 flex flex-col items-center text-center min-h-[160px]">
+                    <div className="p-6 pb-8 flex flex-col items-center text-center min-h-[120px]">
                          <p className="text-xl serif italic text-stone-300 leading-relaxed max-w-xl transition-opacity duration-300">
                              "{aiResponse || "I'm listening. Convince me."}"
                          </p>
                     </div>
 
+                    {/* End Button */}
+                    <div className="pb-12 flex justify-center">
+                        <button
+                            onClick={handleEnd}
+                            className="flex items-center gap-2 px-6 py-3 bg-stone-800/60 border border-stone-700 rounded-full text-stone-400 hover:text-red-400 hover:border-red-500/40 transition-all text-sm font-mono uppercase tracking-wider"
+                        >
+                            <Square className="w-3.5 h-3.5 fill-current" />
+                            End Simulation
+                        </button>
+                    </div>
+
+                </div>
+            )}
+
+            {/* ── FINISHED / SUMMARY ── */}
+            {isFinished && persona && (
+                <div className="flex-1 flex flex-col items-center justify-center p-6 z-10 relative">
+                    <h2 className="text-3xl serif font-light mb-2">Simulation Complete</h2>
+                    <p className="text-stone-500 text-sm tracking-widest uppercase mb-10">{persona.name}</p>
+
+                    <div className="grid grid-cols-2 gap-6 w-full max-w-xs mb-12">
+                        <div className="flex flex-col items-center p-5 bg-stone-800/50 border border-stone-800 rounded-lg">
+                            <span className="text-2xl font-light text-stone-200">{formatTime(elapsedSeconds)}</span>
+                            <span className="text-[10px] font-mono uppercase tracking-widest text-stone-500 mt-1">Duration</span>
+                        </div>
+                        <div className="flex flex-col items-center p-5 bg-stone-800/50 border border-stone-800 rounded-lg">
+                            <span className="text-2xl font-light text-stone-200">{exchanges}</span>
+                            <span className="text-[10px] font-mono uppercase tracking-widest text-stone-500 mt-1">Exchanges</span>
+                        </div>
+                    </div>
+
+                    {aiResponse && (
+                        <div className="max-w-md mb-10 text-center">
+                            <span className="text-[10px] font-mono uppercase tracking-widest text-stone-600 mb-2 block">Last Response</span>
+                            <p className="text-sm italic text-stone-400 leading-relaxed">"{aiResponse}"</p>
+                        </div>
+                    )}
+
+                    <div className="flex gap-4">
+                        <button
+                            onClick={handleRestart}
+                            className="flex items-center gap-2 px-6 py-3 bg-stone-800/60 border border-stone-700 rounded-full text-stone-300 hover:bg-stone-800 hover:border-stone-600 transition-all text-sm font-mono uppercase tracking-wider"
+                        >
+                            <RotateCcw className="w-4 h-4" />
+                            Try Again
+                        </button>
+                        <button
+                            onClick={onBack}
+                            className="flex items-center gap-2 px-6 py-3 bg-stone-800/60 border border-stone-700 rounded-full text-stone-300 hover:bg-stone-800 hover:border-stone-600 transition-all text-sm font-mono uppercase tracking-wider"
+                        >
+                            <ArrowLeft className="w-4 h-4" />
+                            Back
+                        </button>
+                    </div>
                 </div>
             )}
 
