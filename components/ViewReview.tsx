@@ -1,9 +1,7 @@
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { FadeTransition } from './FadeTransition.tsx';
-import { AgentMode } from '../types.ts';
 import { Home, RotateCcw, Check, X } from 'lucide-react';
-import { useRhetor } from '../contexts/RhetorContext.tsx';
 import { useRhetorStore } from '../stores/useRhetorStore.ts';
 import type { SessionRecord } from '../stores/useRhetorStore.ts';
 
@@ -45,6 +43,79 @@ const isCovered = (point: string, transcriptTokens: Set<string>): boolean => {
 };
 
 // ---------------------------------------------------------------------------
+// Coach Debrief via Gemini 2.5 Flash REST API
+// ---------------------------------------------------------------------------
+
+async function generateCoachDebrief(opts: {
+  transcript: string;
+  talkingPoints: string[];
+  coveredCount: number;
+  wpm: number;
+  fillerCount: number;
+  fillerBreakdown: [string, number][];
+  durationSeconds: number;
+  wordsSpoken: number;
+}): Promise<string> {
+  const apiKey =
+    (import.meta as any).env?.VITE_GEMINI_API_KEY ||
+    localStorage.getItem('rhetor_api_key') ||
+    '';
+  if (!apiKey) return 'Session complete. Great work, champion!';
+
+  const { GoogleGenAI } = await import('@google/genai');
+  const ai = new GoogleGenAI({ apiKey });
+
+  const fillerSummary = opts.fillerBreakdown.length > 0
+    ? opts.fillerBreakdown.map(([w, c]) => `"${w}" ×${c}`).join(', ')
+    : 'none';
+
+  const pointsList = opts.talkingPoints
+    .map((pt, i) => `  ${i + 1}. ${pt}`)
+    .join('\n');
+
+  const prompt = `You are ZEUS — an inspiring Greek-mythology-themed speech coach.
+Give a concise, personal debrief of the user's practice session (3-5 sentences max).
+
+RULES:
+- Start with one specific strength you noticed from their actual transcript.
+- Reference REAL numbers — never invent metrics.
+- Mention one concrete area to improve with an actionable tip.
+- End with forward-looking encouragement.
+- Speak naturally and warmly — no "based on my analysis" or robot language.
+- Use occasional mythological flair sparingly ("Like thunder!", "The Agora remembers").
+- Do NOT use markdown formatting. Plain text only.
+
+SESSION DATA:
+- Duration: ${opts.durationSeconds} seconds
+- Words spoken: ${opts.wordsSpoken}
+- Average WPM: ${opts.wpm}
+- Filler words: ${opts.fillerCount} total (${fillerSummary})
+- Talking points (${opts.coveredCount}/${opts.talkingPoints.length} covered):
+${pointsList}
+
+USER TRANSCRIPT (what they actually said):
+"""
+${opts.transcript.slice(0, 3000)}
+"""
+
+Write the debrief now:`;
+
+  try {
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: [{ role: 'user', parts: [{ text: prompt }] }],
+    });
+
+    const raw = (response as any).text ?? '';
+    const cleaned = raw.replace(/```[a-z]*\s*/gi, '').replace(/```\s*/gi, '').trim();
+    return cleaned || 'Strong session, champion. Keep refining your craft!';
+  } catch (err) {
+    console.error('[ViewReview] Debrief generation failed:', err);
+    return 'Session complete — well done, champion. The Agora awaits your return!';
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
@@ -54,8 +125,6 @@ interface ViewReviewProps {
 }
 
 export const ViewReview: React.FC<ViewReviewProps> = ({ onReset, onPracticeAgain }) => {
-  const { setMode, isConnected, isSpeaking, aiResponse } = useRhetor();
-
   // ---- Zustand store data --------------------------------------------------
   const metrics = useRhetorStore((s) => s.currentMetrics);
   const transcript = useRhetorStore((s) => s.transcript);
@@ -116,27 +185,27 @@ export const ViewReview: React.FC<ViewReviewProps> = ({ onReset, onPracticeAgain
     addSessionToHistory(record);
   }, [metrics]); // intentionally minimal deps — runs once
 
-  // ---- Coach debrief via Analyst mode --------------------------------------
+  // ---- Coach debrief via Gemini 2.5 Flash REST API -------------------------
   const [debriefText, setDebriefText] = useState<string | null>(null);
-  const analystStartedRef = useRef(false);
-  const modeSetRef = useRef(false);
+  const debriefStartedRef = useRef(false);
 
   useEffect(() => {
-    if (isConnected && metrics && !modeSetRef.current) {
-      modeSetRef.current = true;
-      setMode(AgentMode.ANALYST, {
-        duration: Math.round(duration / 1000),
-        wpm,
-      });
-    } else if (!isConnected) {
-      modeSetRef.current = false;
-    }
-  }, [isConnected, metrics, setMode, duration, wpm]);
+    if (debriefStartedRef.current || !metrics) return;
+    debriefStartedRef.current = true;
 
-  useEffect(() => {
-    if (isSpeaking && modeSetRef.current) analystStartedRef.current = true;
-    if (!isSpeaking && analystStartedRef.current && aiResponse) setDebriefText(aiResponse);
-  }, [isSpeaking, aiResponse]);
+    const dur = (metrics.endTime ?? Date.now()) - metrics.startTime;
+
+    generateCoachDebrief({
+      transcript,
+      talkingPoints,
+      coveredCount,
+      wpm,
+      fillerCount,
+      fillerBreakdown,
+      durationSeconds: Math.round(dur / 1000),
+      wordsSpoken,
+    }).then(setDebriefText);
+  }, [metrics]); // intentionally minimal deps — runs once
 
   // Nothing to show if session never started
   if (!metrics) return null;

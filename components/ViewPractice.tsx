@@ -27,7 +27,7 @@ export const ViewPractice: React.FC<ViewPracticeProps> = ({ onEnd }) => {
   const recentFillerWord = useRhetorStore((s) => s.recentFillerWord);
   const setNavigationBlocked = useRhetorStore((s) => s.setNavigationBlocked);
   const suggestedDuration = useRhetorStore((s) => s.suggestedDuration);
-  const teleprompterAdvanceIndex = useRhetorStore((s) => s.teleprompterAdvanceIndex);
+  const teleprompterAdvanceCounter = useRhetorStore((s) => s.teleprompterAdvanceCounter);
   const [fillerFlash, setFillerFlash] = useState(false);
   const duration = suggestedDuration > 0 ? suggestedDuration : 120;
   const [timeLeft, setTimeLeft] = useState(duration);
@@ -124,18 +124,24 @@ export const ViewPractice: React.FC<ViewPracticeProps> = ({ onEnd }) => {
   }, [lastTranscript]);
 
   // React to AI calling advance_teleprompter tool via Zustand store
+  const prevCounterRef = useRef(teleprompterAdvanceCounter);
   useEffect(() => {
-    if (teleprompterAdvanceIndex >= 0 && talkingPoints.length > 0) {
-      console.log('[ViewPractice] AI advance_teleprompter →', teleprompterAdvanceIndex);
+    if (teleprompterAdvanceCounter > prevCounterRef.current && talkingPoints.length > 0) {
+      console.log('[ViewPractice] AI advance_teleprompter → counter', teleprompterAdvanceCounter);
+      prevCounterRef.current = teleprompterAdvanceCounter;
+      // Advance by 1 — same as handlePrompterClick
       setPrompterIndex(prev => {
-        const next = Math.max(prev, teleprompterAdvanceIndex);
-        if (next >= talkingPoints.length - 1) {
-          setAllCovered(true);
+        if (prev < talkingPoints.length - 1) {
+          const next = prev + 1;
+          if (next >= talkingPoints.length - 1) {
+            setAllCovered(true);
+          }
+          return next;
         }
-        return next;
+        return prev;
       });
     }
-  }, [teleprompterAdvanceIndex, talkingPoints.length]);
+  }, [teleprompterAdvanceCounter, talkingPoints.length]);
 
   // Set mode when connected — reset on disconnect so it re-fires after reconnection
   const modeSetRef = useRef(false);

@@ -173,7 +173,7 @@ interface UISlice {
   feedbackPending: { type: string; message: string; data?: unknown } | null;
   navigationBlocked: boolean;
   pendingNavigation: string | null;
-  teleprompterAdvanceIndex: number;
+  teleprompterAdvanceCounter: number;
   
   // Actions
   navigate: (view: string) => void;
@@ -188,7 +188,7 @@ interface UISlice {
   setNavigationBlocked: (blocked: boolean) => void;
   confirmNavigation: () => void;
   cancelNavigation: () => void;
-  advanceTeleprompter: (index?: number) => void;
+  advanceTeleprompter: () => void;
 }
 
 // ============================================================================
@@ -676,7 +676,7 @@ export const useRhetorStore = create<RhetorStore>()(
       feedbackPending: null,
       navigationBlocked: false,
       pendingNavigation: null,
-      teleprompterAdvanceIndex: -1,
+      teleprompterAdvanceCounter: 0,
 
       navigate: (view: string) => {
         const state = get();
@@ -775,9 +775,9 @@ export const useRhetorStore = create<RhetorStore>()(
         });
       },
 
-      advanceTeleprompter: (index?: number) => {
+      advanceTeleprompter: () => {
         set((state) => {
-          state.teleprompterAdvanceIndex = index ?? state.teleprompterAdvanceIndex + 1;
+          state.teleprompterAdvanceCounter += 1;
         });
       },
     })),

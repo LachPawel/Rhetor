@@ -536,14 +536,14 @@ export class ToolHandler {
   // ============================================================================
 
   private handleAdvanceTeleprompter(args: AdvanceTeleprompterArgs): ToolCallResult {
-    const { index, reason } = args;
+    const { reason } = args;
     
-    console.log('[ToolHandler] advance_teleprompter called:', { index, reason });
-    this.store.getState().advanceTeleprompter(index);
+    console.log('[ToolHandler] advance_teleprompter called:', { reason });
+    this.store.getState().advanceTeleprompter();
 
     return {
       success: true,
-      result: `Teleprompter advanced${index !== undefined ? ` to index ${index}` : ''}${reason ? `: ${reason}` : ''}`,
+      result: `Teleprompter advanced to next point${reason ? `: ${reason}` : ''}`,
     };
   }
 
