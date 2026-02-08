@@ -27,6 +27,7 @@ export const ViewPractice: React.FC<ViewPracticeProps> = ({ onEnd }) => {
   const recentFillerWord = useRhetorStore((s) => s.recentFillerWord);
   const setNavigationBlocked = useRhetorStore((s) => s.setNavigationBlocked);
   const suggestedDuration = useRhetorStore((s) => s.suggestedDuration);
+  const teleprompterAdvanceIndex = useRhetorStore((s) => s.teleprompterAdvanceIndex);
   const [fillerFlash, setFillerFlash] = useState(false);
   const duration = suggestedDuration > 0 ? suggestedDuration : 120;
   const [timeLeft, setTimeLeft] = useState(duration);
@@ -63,7 +64,9 @@ export const ViewPractice: React.FC<ViewPracticeProps> = ({ onEnd }) => {
   useEffect(() => {
     // When AI stops speaking (transition from speaking → not speaking), snapshot the response
     if (prevSpeakingRef.current && !isSpeaking && aiResponse) {
-      setLastCoachMessage(aiResponse);
+      // Strip any ctrl tokens that may have leaked through
+      const clean = aiResponse.replace(/<\/?ctrl\d+>/gi, '').trim();
+      setLastCoachMessage(clean || null);
     }
     prevSpeakingRef.current = isSpeaking;
   }, [isSpeaking, aiResponse]);
@@ -119,6 +122,20 @@ export const ViewPractice: React.FC<ViewPracticeProps> = ({ onEnd }) => {
       prevTranscriptLenRef.current = lastTranscript.length;
     }
   }, [lastTranscript]);
+
+  // React to AI calling advance_teleprompter tool via Zustand store
+  useEffect(() => {
+    if (teleprompterAdvanceIndex >= 0 && talkingPoints.length > 0) {
+      console.log('[ViewPractice] AI advance_teleprompter →', teleprompterAdvanceIndex);
+      setPrompterIndex(prev => {
+        const next = Math.max(prev, teleprompterAdvanceIndex);
+        if (next >= talkingPoints.length - 1) {
+          setAllCovered(true);
+        }
+        return next;
+      });
+    }
+  }, [teleprompterAdvanceIndex, talkingPoints.length]);
 
   // Set mode when connected — reset on disconnect so it re-fires after reconnection
   const modeSetRef = useRef(false);
@@ -291,14 +308,14 @@ export const ViewPractice: React.FC<ViewPracticeProps> = ({ onEnd }) => {
         </div>
       </div>
       
-      {/* Coach Feedback Floating — only show when AI is NOT actively speaking to avoid streaming text */}
-      <div className="absolute bottom-24 left-0 w-full flex justify-center pointer-events-none z-20">
-        {lastCoachMessage && !isSpeaking && (
-          <div className="bg-white/90 backdrop-blur px-8 py-4 rounded-full border border-stone-200 text-stone-900 text-lg serif italic shadow-xl animate-fade-in-up max-w-xl truncate">
+      {/* Coach Feedback Floating — positioned between video and transcript */}
+      {lastCoachMessage && !isSpeaking && (
+        <div className="w-full max-w-4xl mx-auto mt-3 flex justify-center z-10">
+          <div className="bg-white/90 backdrop-blur px-6 py-3 rounded-full border border-stone-200 text-stone-900 text-base serif italic shadow-lg max-w-xl truncate">
             "{lastCoachMessage}"
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* ── LIVE TRANSCRIPT PANEL ──────────────────────────────────── */}
       {showTranscript && (

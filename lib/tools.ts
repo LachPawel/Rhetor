@@ -476,6 +476,33 @@ export const endSessionTool: FunctionDeclaration = {
 };
 
 // ============================================================================
+// TELEPROMPTER TOOLS
+// ============================================================================
+
+export const advanceTeleprompterTool: FunctionDeclaration = {
+  name: 'advance_teleprompter',
+  description: `Advance the teleprompter to the next talking point during a practice session.
+Call this when you detect the user has covered the current talking point based on what they are saying.
+Listen for key concepts and phrases from each bullet and advance when you hear them.
+You can also skip to a specific index if the user jumps ahead.
+IMPORTANT: Call this proactively as the user speaks — do NOT wait for them to finish.`,
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      index: {
+        type: Type.NUMBER,
+        description: 'The 0-based index of the talking point to advance to. If omitted, advances to the next one.',
+      },
+      reason: {
+        type: Type.STRING,
+        description: 'Brief note on which key phrase triggered the advance (for logging)',
+      },
+    },
+    required: [],
+  },
+};
+
+// ============================================================================
 // EXPORT ALL TOOLS
 // ============================================================================
 
@@ -496,6 +523,7 @@ export const ALL_TOOLS: FunctionDeclaration[] = [
   savePitchTool,
   startSessionTool,
   endSessionTool,
+  advanceTeleprompterTool,
 ];
 
 // Tool names for type safety
@@ -515,7 +543,8 @@ export type ToolName =
   | 'play_sound'
   | 'save_pitch'
   | 'start_session'
-  | 'end_session';
+  | 'end_session'
+  | 'advance_teleprompter';
 
 // ============================================================================
 // TOOL ARGUMENT TYPES
@@ -629,6 +658,11 @@ export interface EndSessionArgs {
   reason: 'completed' | 'user_stopped' | 'timeout' | 'error';
 }
 
+export interface AdvanceTeleprompterArgs {
+  index?: number;
+  reason?: string;
+}
+
 export type ToolArgs = 
   | { name: 'navigate_to'; args: NavigateToArgs }
   | { name: 'show_visual'; args: ShowVisualArgs }
@@ -645,4 +679,5 @@ export type ToolArgs =
   | { name: 'play_sound'; args: PlaySoundArgs }
   | { name: 'save_pitch'; args: SavePitchArgs }
   | { name: 'start_session'; args: StartSessionArgs }
-  | { name: 'end_session'; args: EndSessionArgs };
+  | { name: 'end_session'; args: EndSessionArgs }
+  | { name: 'advance_teleprompter'; args: AdvanceTeleprompterArgs };

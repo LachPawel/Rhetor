@@ -80,9 +80,9 @@ const MIC_SAMPLE_RATE = 16000;   // Gemini input
 export function useRhetor(options: UseRhetorOptions): UseRhetorReturn {
   const { apiKey, autoConnect = false, enableFillerDetection = true } = options;
   
-  /** Strip Gemini control tokens (e.g. <ctrl46>, <ctrl97>) from transcription text. */
+  /** Strip Gemini control tokens (e.g. <ctrl46>, </ctrl46>) from transcription text. */
   const sanitizeTranscription = (text: string): string =>
-    text.replace(/<ctrl\d+>/gi, '').replace(/\s{2,}/g, ' ').trim();
+    text.replace(/<\/?ctrl\d+>/gi, '').replace(/\s{2,}/g, ' ').trim();
 
   // Refs
   const clientRef = useRef<GeminiLiveClient | null>(null);

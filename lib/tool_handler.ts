@@ -24,6 +24,7 @@ import {
   type SavePitchArgs,
   type StartSessionArgs,
   type EndSessionArgs,
+  type AdvanceTeleprompterArgs,
 } from './tools';
 
 // ============================================================================
@@ -150,6 +151,9 @@ export class ToolHandler {
         
         case 'end_session':
           return this.handleEndSession(args as EndSessionArgs);
+        
+        case 'advance_teleprompter':
+          return this.handleAdvanceTeleprompter(args as AdvanceTeleprompterArgs);
         
         default:
           return {
@@ -524,6 +528,22 @@ export class ToolHandler {
       success: true,
       result: `Session ended: ${reason}`,
       data: { reason, metrics },
+    };
+  }
+
+  // ============================================================================
+  // TELEPROMPTER HANDLERS
+  // ============================================================================
+
+  private handleAdvanceTeleprompter(args: AdvanceTeleprompterArgs): ToolCallResult {
+    const { index, reason } = args;
+    
+    console.log('[ToolHandler] advance_teleprompter called:', { index, reason });
+    this.store.getState().advanceTeleprompter(index);
+
+    return {
+      success: true,
+      result: `Teleprompter advanced${index !== undefined ? ` to index ${index}` : ''}${reason ? `: ${reason}` : ''}`,
     };
   }
 

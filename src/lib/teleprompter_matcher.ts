@@ -173,15 +173,29 @@ export function createTeleprompterMatcher(): TeleprompterMatcher {
     },
 
     feedTranscript(text: string): void {
-      const words = text
+      const rawWords = text
         .split(/\s+/)
         .map(normalize)
         .filter((w) => w.length > 0);
 
-      if (words.length === 0) return;
+      if (rawWords.length === 0) return;
 
-      window = [...window, ...words].slice(-WINDOW_SIZE);
-      dbg(`feedTranscript: +${words.length} words, window=${window.length}, text="${text.slice(0, 80)}…"`);
+      // Gemini often fragments words ("con ver sa tion" instead of "conversation").
+      // Build composite words by joining adjacent fragments so key terms can match.
+      const composites: string[] = [];
+      for (let i = 0; i < rawWords.length; i++) {
+        composites.push(rawWords[i]);
+        // Also create 2-gram and 3-gram joins of adjacent fragments
+        if (i + 1 < rawWords.length) {
+          composites.push(rawWords[i] + rawWords[i + 1]);
+        }
+        if (i + 2 < rawWords.length) {
+          composites.push(rawWords[i] + rawWords[i + 1] + rawWords[i + 2]);
+        }
+      }
+
+      window = [...window, ...composites].slice(-WINDOW_SIZE);
+      dbg(`feedTranscript: +${rawWords.length} raw words, +${composites.length} composites, window=${window.length}, text="${text.slice(0, 80)}…"`);
       evaluate();
     },
 
