@@ -3,7 +3,8 @@ import React, { useEffect } from 'react';
 import { FadeTransition } from './FadeTransition.tsx';
 import { AppView, AgentMode } from '../types.ts';
 import { useRhetor } from '../contexts/RhetorContext.tsx';
-import { Mic, Sparkles, Flame, Coins, Zap } from 'lucide-react';
+import { Mic, Sparkles, Flame, Coins, Zap, Wind, FileText, BookOpen, Target, Play } from 'lucide-react';
+import { useRhetorStore } from '../stores/useRhetorStore';
 
 interface ViewHomeProps {
   onChangeView: (view: AppView) => void;
@@ -11,6 +12,7 @@ interface ViewHomeProps {
 
 export const ViewHome: React.FC<ViewHomeProps> = ({ onChangeView }) => {
   const { connect, isConnected, isConnecting, setMode, user } = useRhetor();
+  const sessionHistory = useRhetorStore((s) => s.sessionHistory);
 
   useEffect(() => {
     if (isConnected) {
@@ -18,77 +20,120 @@ export const ViewHome: React.FC<ViewHomeProps> = ({ onChangeView }) => {
     }
   }, [isConnected]);
 
-  const handleStartJourney = async () => {
+  // Connect before warm up action
+  const handleWarmUp = async () => {
     if (!isConnected) await connect();
-    // Default to daily challenge or warmup
     onChangeView(AppView.WARMUP);
+  };
+  
+  // Connect before practice
+  const handlePractice = async () => {
+    if (!isConnected) await connect();
+    onChangeView(AppView.PRACTICE);
   };
 
   return (
     <FadeTransition className="flex flex-col min-h-screen pb-20 bg-stone-50 text-stone-900">
       
-      {/* Top Bar - Minimal */}
-      <div className="px-6 pt-8 pb-4">
+      {/* Top Bar */}
+      <div className="px-6 pt-8 pb-4 flex justify-between items-center">
           <h1 className="text-2xl serif font-bold text-stone-900">Rhetor</h1>
+          <div className="flex items-center gap-4">
+              <div className="flex items-center gap-1.5 text-stone-600">
+                  <Flame className="w-4 h-4 text-stone-400" />
+                  <span className="text-sm font-mono font-bold">{user.streak}</span>
+              </div>
+              <div className="flex items-center gap-1.5 text-stone-600">
+                  <Coins className="w-4 h-4 text-stone-400" />
+                  <span className="text-sm font-mono font-bold">{user.drachmas}</span>
+              </div>
+          </div>
       </div>
 
       <div className="px-6 flex-1 flex flex-col gap-6">
         
-        {/* Daily Challenge Card */}
-        <div className="bg-stone-900 text-white p-6 rounded-lg shadow-xl relative overflow-hidden group cursor-pointer" onClick={handleStartJourney}>
-            <div className="relative z-10">
-                <div className="flex justify-between items-start mb-4">
-                    <span className="text-[10px] uppercase tracking-widest font-bold bg-white/20 px-2 py-1 rounded">Daily Challenge</span>
-                    <span className="text-emerald-400 text-xs font-mono">+50 Δ</span>
-                </div>
-                <h3 className="text-2xl serif font-light mb-2">The Filler Killer</h3>
-                <p className="text-stone-400 text-sm mb-6 max-w-[80%]">Speak for 60 seconds with zero filler words. Can you do it?</p>
-                <div className="flex items-center gap-2 text-sm font-medium">
-                    {isConnecting ? "Connecting..." : "Start Challenge"} 
-                    <Zap className="w-4 h-4" />
-                </div>
+        {/* Today's Challenge */}
+        <div className="bg-stone-100 border border-stone-200 p-4 rounded-lg flex items-center justify-between cursor-pointer hover:bg-stone-200 transition-colors" onClick={handleWarmUp}>
+            <div>
+                 <div className="flex items-center gap-2 mb-1">
+                     <Target className="w-3 h-3 text-stone-500" />
+                     <span className="text-[10px] uppercase tracking-widest font-bold text-stone-500">Today's Challenge</span>
+                 </div>
+                 <h3 className="font-serif text-lg text-stone-900">Complete "Box Breathing"</h3>
             </div>
-            {/* Abstract Background Decoration */}
-            <div className="absolute -right-4 -bottom-4 w-32 h-32 bg-stone-800 rounded-full opacity-50 group-hover:scale-110 transition-transform duration-500" />
+            <span className="px-2 py-1 bg-stone-200 rounded text-xs font-mono font-bold text-stone-600">+20 Δ</span>
         </div>
 
         {/* Quick Actions Grid */}
         <div className="grid grid-cols-2 gap-4">
-            <button onClick={() => onChangeView(AppView.PREP)} className="p-4 bg-white border border-stone-200 rounded-lg shadow-sm hover:border-stone-400 transition-all text-left">
-                <div className="w-8 h-8 rounded-full bg-stone-100 flex items-center justify-center mb-3">
+            <button onClick={handleWarmUp} className="p-4 bg-white border border-stone-200 rounded-lg shadow-sm hover:border-stone-400 transition-all text-left flex flex-col justify-between h-32">
+                <div className="w-8 h-8 rounded-full bg-stone-100 flex items-center justify-center">
+                    <Wind className="w-4 h-4 text-stone-600" />
+                </div>
+                <div>
+                    <h4 className="font-serif text-lg leading-none mb-1">Warm Up</h4>
+                    <p className="text-xs text-stone-500">Breathe & focus</p>
+                </div>
+            </button>
+
+            <button onClick={() => onChangeView(AppView.PREP)} className="p-4 bg-white border border-stone-200 rounded-lg shadow-sm hover:border-stone-400 transition-all text-left flex flex-col justify-between h-32">
+                <div className="w-8 h-8 rounded-full bg-stone-100 flex items-center justify-center">
+                    <FileText className="w-4 h-4 text-stone-600" />
+                </div>
+                <div>
+                    <h4 className="font-serif text-lg leading-none mb-1">Prepare</h4>
+                    <p className="text-xs text-stone-500">Build content</p>
+                </div>
+            </button>
+
+            <button onClick={handlePractice} className="p-4 bg-white border border-stone-200 rounded-lg shadow-sm hover:border-stone-400 transition-all text-left flex flex-col justify-between h-32">
+                <div className="w-8 h-8 rounded-full bg-stone-100 flex items-center justify-center">
                     <Mic className="w-4 h-4 text-stone-600" />
                 </div>
-                <h4 className="font-serif text-lg">Build Pitch</h4>
-                <p className="text-xs text-stone-500 mt-1">AI Interview Mode</p>
+                <div>
+                    <h4 className="font-serif text-lg leading-none mb-1">Practice</h4>
+                    <p className="text-xs text-stone-500">Deliver your talk</p>
+                </div>
             </button>
 
-            <button onClick={() => onChangeView(AppView.PRACTICE)} className="p-4 bg-white border border-stone-200 rounded-lg shadow-sm hover:border-stone-400 transition-all text-left">
-                <div className="w-8 h-8 rounded-full bg-stone-100 flex items-center justify-center mb-3">
-                    <Sparkles className="w-4 h-4 text-stone-600" />
+            <button onClick={() => onChangeView(AppView.AGORA)} className="p-4 bg-white border border-stone-200 rounded-lg shadow-sm hover:border-stone-400 transition-all text-left flex flex-col justify-between h-32">
+                <div className="w-8 h-8 rounded-full bg-stone-100 flex items-center justify-center">
+                    <BookOpen className="w-4 h-4 text-stone-600" />
                 </div>
-                <h4 className="font-serif text-lg">Quick Practice</h4>
-                <p className="text-xs text-stone-500 mt-1">Freestyle Session</p>
+                <div>
+                    <h4 className="font-serif text-lg leading-none mb-1">Academy</h4>
+                    <p className="text-xs text-stone-500">Learn skills</p>
+                </div>
             </button>
         </div>
 
-        {/* Continue Learning Section */}
-        <div className="mt-2">
-            <div className="flex justify-between items-end mb-4">
-                <h3 className="text-lg serif text-stone-900">Continue Learning</h3>
-                <button onClick={() => onChangeView(AppView.AGORA)} className="text-xs uppercase tracking-widest text-stone-400">View All</button>
-            </div>
-            
-            <div className="bg-white border border-stone-200 p-4 rounded-lg flex items-center gap-4 cursor-pointer hover:bg-stone-50 transition-colors" onClick={() => onChangeView(AppView.AGORA)}>
-                <div className="w-12 h-12 rounded bg-stone-200 flex items-center justify-center text-stone-500 font-serif text-xl font-bold">I</div>
-                <div className="flex-1">
-                    <h4 className="text-sm font-bold text-stone-900 uppercase tracking-wide">Ethos Pillar</h4>
-                    <p className="text-xs text-stone-500 mt-0.5">Skill 2: The "Why You" Story</p>
-                    <div className="w-full h-1 bg-stone-100 mt-3 rounded-full overflow-hidden">
-                        <div className="h-full bg-emerald-500 w-1/3" />
-                    </div>
+        {/* Recent Sessions */}
+        {sessionHistory && sessionHistory.length > 0 && (
+            <div className="mt-2">
+                <div className="flex justify-between items-end mb-4">
+                    <h3 className="text-lg serif text-stone-900">Recent Sessions</h3>
+                    <button onClick={() => onChangeView(AppView.PROFILE)} className="text-xs uppercase tracking-widest text-stone-400">View All</button>
+                </div>
+                
+                <div className="flex flex-col gap-3">
+                    {sessionHistory.slice(-2).reverse().map(session => (
+                        <div key={session.id} className="bg-white border border-stone-200 p-4 rounded-lg flex items-center justify-between">
+                            <div>
+                                <h4 className="text-sm font-bold text-stone-900 truncate max-w-[150px]">{session.topic || 'Freestyle Session'}</h4>
+                                <div className="flex items-center gap-2 mt-1">
+                                    <span className="text-xs text-stone-500">Score: {session.score}</span>
+                                    <span className="text-stone-300">•</span>
+                                    <span className="text-xs text-stone-500 font-mono">{Math.floor(session.duration/60)}:{String(session.duration%60).padStart(2,'0')}</span>
+                                </div>
+                            </div>
+                            <div className="w-8 h-8 rounded-full bg-stone-50 flex items-center justify-center">
+                                <Play className="w-3 h-3 text-stone-400 ml-0.5" />
+                            </div>
+                        </div>
+                    ))}
                 </div>
             </div>
-        </div>
+        )}
 
       </div>
     </FadeTransition>

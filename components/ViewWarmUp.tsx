@@ -123,10 +123,10 @@ const DRACHMA_REWARD = 15;
 // ── Helper function for breath phase message ──────────────────────────────
 const getBreathPhaseMessage = (phase: BreathPhase): string => {
   switch (phase) {
-    case 'inhale': return 'Breathe In';
-    case 'hold': return 'Hold';
-    case 'exhale': return 'Breathe Out';
-    default: return 'Ready when you are';
+    case 'inhale': return 'Breathe In...';
+    case 'hold': return 'Hold...';
+    case 'exhale': return 'Breathe Out...';
+    default: return 'Ready to breathe?';
   }
 };
 
@@ -156,7 +156,7 @@ const PhaseIcon: React.FC<{ phase: BreathPhase }> = ({ phase }) => {
 };
 
 export const ViewWarmUp: React.FC<ViewWarmUpProps> = ({ onComplete, onExit }) => {
-  const { setMode, isConnected, volume, addDrachmas } = useRhetor();
+  const { setMode, isConnected, addDrachmas } = useRhetor();
   const [stageIndex, setStageIndex] = useState(0);
   const currentStage = STAGES[stageIndex];
   
