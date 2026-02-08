@@ -17,7 +17,7 @@ import { getToolHandler } from './tool_handler';
 import { useFillerDetector } from './filler_detector';
 import { AudioStreamer } from './audio_streamer';
 import { AudioRecorder } from './audio_recorder';
-import { RHETOR_SYSTEM_INSTRUCTION, VOICE_CONFIG, buildWelcomerContext, buildLessonContext, buildWarmupContext, buildAnalystContext } from './prompts';
+import { RHETOR_SYSTEM_INSTRUCTION, VOICE_CONFIG, buildWelcomerContext, buildLessonContext, buildWarmupContext, buildAnalystContext, buildPracticeContext, buildContentBuilderContext } from './prompts';
 import type { AIMode } from '../stores/useRhetorStore';
 import { Modality } from '@google/genai';
 
@@ -398,23 +398,30 @@ export function useRhetor(options: UseRhetorOptions): UseRhetorReturn {
         contextJson = buildLessonContext(
           user,
           context?.lesson as { id: string; title: string; description: string; pillar: string },
-          (context?.stepNumber as number) ?? 0
+          (context?.stepNumber as number) ?? 0,
+          context?.step as { index: number; total: number; type: string; aiPrompt: string; expectedAction?: string; duration?: number } | undefined
         );
         break;
       case 'coach_warmup':
         contextJson = buildWarmupContext(
           user,
           (context?.exerciseType as string) ?? 'breathing',
-          (context?.stepNumber as number) ?? 0
+          (context?.stepNumber as number) ?? 0,
+          (context?.stage as string) ?? undefined
         );
         break;
       case 'coach_practice':
-        contextJson = JSON.stringify({
-          mode: 'coach_practice',
+        contextJson = buildPracticeContext(
           user,
-          talkingPoints: context?.talkingPoints ?? useRhetorStore.getState().talkingPoints,
-          pitchTopic: useRhetorStore.getState().pitchTopic,
-        });
+          (context?.talkingPoints as string[]) ?? useRhetorStore.getState().talkingPoints,
+          useRhetorStore.getState().pitchTopic,
+          {
+            fillerCount: useRhetorStore.getState().currentMetrics?.fillerCount ?? 0,
+            wpm: useRhetorStore.getState().currentMetrics?.wpm ?? 0,
+            clarity: useRhetorStore.getState().currentMetrics?.clarity ?? 100,
+            duration: useRhetorStore.getState().currentMetrics?.duration ?? 0,
+          }
+        );
         break;
       case 'analyst':
         contextJson = buildAnalystContext(user, {
@@ -425,6 +432,13 @@ export function useRhetor(options: UseRhetorOptions): UseRhetorReturn {
           transcript: useRhetorStore.getState().transcript,
           talkingPoints: useRhetorStore.getState().talkingPoints,
         });
+        break;
+      case 'content_builder':
+        contextJson = buildContentBuilderContext(
+          user,
+          (context?.sourceText as string) ?? '',
+          (context?.requestType as 'extract' | 'improve') ?? 'extract'
+        );
         break;
       default:
         contextJson = JSON.stringify({ mode, user, ...context });

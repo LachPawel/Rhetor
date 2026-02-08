@@ -55,7 +55,7 @@ export const lessons: Lesson[] = [
       {
         type: 'practice',
         instruction:
-          'Now do one final cycle on your own while I listen. I'll score how even and rhythmic your breathing is.',
+          'Now do one final cycle on your own while I listen. I\'ll score how even and rhythmic your breathing is.',
         aiPrompt:
           'Tell the student to perform one box-breathing cycle independently while you listen. After they finish, evaluate the rhythm and evenness of their breathing. Score them out of 10 and offer one concrete tip for improvement, such as "Try relaxing your shoulders on the exhale."',
         duration: 25,
@@ -96,7 +96,7 @@ export const lessons: Lesson[] = [
       {
         type: 'practice',
         instruction:
-          'Take one deep belly breath, then sustain a long "ahhh" sound. I'll time how long you can hold it — aim for at least 10 seconds.',
+          'Take one deep belly breath, then sustain a long "ahhh" sound. I\'ll time how long you can hold it — aim for at least 10 seconds.',
         aiPrompt:
           'Instruct the student to take one deep diaphragmatic inhale and then sustain a steady "ahhh" sound for as long as possible. Time them and report the duration. If they reach 10+ seconds, congratulate them. If under 10, encourage them and explain that regular practice will build capacity. Give a score out of 10.',
         duration: 35,
@@ -120,7 +120,7 @@ export const lessons: Lesson[] = [
       {
         type: 'explain',
         instruction:
-          'Just like athletes stretch before a game, speakers must warm up their voice. Cold vocal cords produce a thin, strained sound. We'll use humming and lip trills to get you stage-ready.',
+          'Just like athletes stretch before a game, speakers must warm up their voice. Cold vocal cords produce a thin, strained sound. We\'ll use humming and lip trills to get you stage-ready.',
         aiPrompt:
           'Explain why vocal warm-ups matter. Compare vocal cords to muscles that need stretching. Mention that professional singers and actors never skip warm-ups. Tell the student that humming gently vibrates the cords without strain, and lip trills add airflow control. This combination produces a warm, resonant speaking voice.',
         duration: 25,
@@ -173,7 +173,7 @@ export const lessons: Lesson[] = [
         instruction:
           'Level 1 — Say clearly: "Red lorry, yellow lorry" three times fast.',
         aiPrompt:
-          'Present the first tongue twister: "Red lorry, yellow lorry." Ask the student to say it three times as quickly as they can while staying clear. Listen carefully for slurred consonants or swapped sounds. Give specific feedback — e.g., "Your 'l' and 'r' sounds blurred on the second repeat." Rate clarity out of 10.',
+          'Present the first tongue twister: "Red lorry, yellow lorry." Ask the student to say it three times as quickly as they can while staying clear. Listen carefully for slurred consonants or swapped sounds. Give specific feedback — e.g., "Your \'l\' and \'r\' sounds blurred on the second repeat." Rate clarity out of 10.',
         duration: 30,
         expectedAction: 'speak',
       },
@@ -222,7 +222,7 @@ export const lessons: Lesson[] = [
       {
         type: 'practice',
         instruction:
-          'I'll ask you a random question. Answer in 15–20 seconds WITHOUT using any filler words. If you need to think, just pause silently.',
+          'I\'ll ask you a random question. Answer in 15–20 seconds WITHOUT using any filler words. If you need to think, just pause silently.',
         aiPrompt:
           'Ask the student a simple but open-ended question — for example "What did you have for breakfast and why?" or "Describe your favourite room in your house." Give them 15–20 seconds to respond. Count every filler word ("um," "uh," "like," "you know," "so," "basically") and report the total. Encourage silent pauses instead.',
         duration: 40,
@@ -240,7 +240,7 @@ export const lessons: Lesson[] = [
       {
         type: 'practice',
         instruction:
-          'Final round — the hardest question. Try for zero fillers. I'll give you a final score.',
+          'Final round — the hardest question. Try for zero fillers. I\'ll give you a final score.',
         aiPrompt:
           'Ask a challenging, opinion-based question — for example "If you could change one thing about the education system, what would it be and why?" Give them 25 seconds. Count every filler. Provide a final scorecard: total fillers across all three rounds, improvement trend, and an overall filler-free score out of 10. End with one actionable tip they can use in daily conversation.',
         duration: 65,
@@ -288,7 +288,7 @@ export const lessons: Lesson[] = [
       {
         type: 'practice',
         instruction:
-          'Pick any topic you care about and create one hook — using any of the 4 types. Deliver it like you're opening a real speech.',
+          'Pick any topic you care about and create one hook — using any of the 4 types. Deliver it like you\'re opening a real speech.',
         aiPrompt:
           'Tell the student to choose any topic and craft one opening hook using any of the four types. Give them a moment to think, then have them deliver it aloud as if they are on stage. Evaluate: (1) Did it grab attention in the first 5 seconds? (2) Was the delivery confident? (3) Which hook type did they use? Give specific praise and one suggestion to make it even punchier.',
         duration: 35,

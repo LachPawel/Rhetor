@@ -58,7 +58,7 @@ export interface PracticeSessionRecord {
 
 export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'reconnecting' | 'error' | 'closed';
 
-export type AIMode = 'welcomer' | 'coach_lesson' | 'coach_warmup' | 'coach_practice' | 'interviewer' | 'analyst' | 'idle';
+export type AIMode = 'welcomer' | 'coach_lesson' | 'coach_warmup' | 'coach_practice' | 'interviewer' | 'analyst' | 'content_builder' | 'idle';
 
 export interface VisualState {
   id: string;
