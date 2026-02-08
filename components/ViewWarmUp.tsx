@@ -6,7 +6,7 @@ import { X, Wind, Pause, ArrowDown, ChevronRight, Music, Waves, Type, SkipForwar
 import { useRhetor } from '../contexts/RhetorContext.tsx';
 import { AgentMode } from '../types.ts';
 
-type BreathPhase = 'idle' | 'inhale' | 'hold' | 'exhale';
+type BreathPhase = 'idle' | 'inhale' | 'hold' | 'exhale' | 'hold-empty';
 
 interface ViewWarmUpProps {
   onComplete: () => void;
@@ -126,6 +126,7 @@ const getBreathPhaseMessage = (phase: BreathPhase): string => {
     case 'inhale': return 'Breathe In...';
     case 'hold': return 'Hold...';
     case 'exhale': return 'Breathe Out...';
+    case 'hold-empty': return 'Hold...';
     default: return 'Ready to breathe?';
   }
 };
@@ -135,13 +136,15 @@ const PHASE_CIRCLE: Record<BreathPhase, { scale: number; opacity: number; border
   idle:    { scale: 1,    opacity: 0.3, borderColor: 'rgba(0,0,0,0.2)' },
   inhale:  { scale: 1.6, opacity: 1,   borderColor: 'rgba(0,0,0,1)' },
   hold:    { scale: 1.6, opacity: 0.9, borderColor: 'rgba(0,0,0,0.9)' },
-  exhale:  { scale: 0.7, opacity: 0.7,  borderColor: 'rgba(0,0,0,0.4)' },
+  exhale:  { scale: 1,  opacity: 0.7,  borderColor: 'rgba(0,0,0,0.4)' },
+  'hold-empty': { scale: 1, opacity: 0.7, borderColor: 'rgba(0,0,0,0.4)' },
 };
 const PHASE_TRANSITION: Record<BreathPhase, { duration: number; ease: string }> = {
   idle:    { duration: 0.6, ease: 'easeOut' },
   inhale:  { duration: 3.8, ease: 'easeInOut' },
   hold:    { duration: 0.4, ease: 'easeOut' },
   exhale:  { duration: 3.8, ease: 'easeInOut' },
+  'hold-empty': { duration: 0.4, ease: 'easeOut' },
 };
 
 // ── Phase icon helper ──────────────────────────────────────────────────
@@ -151,6 +154,7 @@ const PhaseIcon: React.FC<{ phase: BreathPhase }> = ({ phase }) => {
     case 'inhale': return <Wind className={cls} />;
     case 'hold':   return <Pause className={cls} />;
     case 'exhale': return <ArrowDown className={cls} />;
+    case 'hold-empty': return <Pause className={cls} />;
     default:       return null;
   }
 };
@@ -252,7 +256,7 @@ export const ViewWarmUp: React.FC<ViewWarmUpProps> = ({ onComplete, onExit }) =>
     } else if (cycleElapsed < PHASE_DURATION * 3) {
       setBreathPhase('exhale');
     } else {
-      setBreathPhase('hold');
+      setBreathPhase('hold-empty');
     }
   }, [breathTimer, currentStage.id, breathCompleted]);
 
