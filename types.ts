@@ -12,6 +12,7 @@ export enum AppView {
   PRACTICE = 'PRACTICE',
   REVIEW = 'REVIEW',
   LESSON = 'LESSON',
+  KILL_FILLERS = 'KILL_FILLERS',
 }
 
 export enum AgentMode {

@@ -20,6 +20,7 @@ import { ViewInput } from './components/ViewInput';
 import { ViewPrep } from './components/ViewPrep';
 import { ViewPractice } from './components/ViewPractice';
 import { ViewReview } from './components/ViewReview';
+import { ViewKillFillers } from './components/ViewKillFillers';
 import { BottomNav } from './components/BottomNav';
 import { AIStatusOrb } from './components/AIStatusOrb';
 
@@ -308,6 +309,7 @@ function AppContent() {
       PRACTICE: AppView.PRACTICE,
       REVIEW: AppView.REVIEW,
       LESSON: AppView.LESSON,
+      KILL_FILLERS: AppView.KILL_FILLERS,
     };
     
     if (viewMap[storeView] !== undefined && viewMap[storeView] !== localView) {
@@ -329,10 +331,16 @@ function AppContent() {
     AppView.PRACTICE,
     AppView.REVIEW,
     AppView.LESSON,
+    AppView.KILL_FILLERS,
   ].includes(localView);
 
   // Handlers
   const handleLessonSelect = useCallback((lesson: Lesson) => {
+    // Special: "Kill the Fillers" launches the interactive game
+    if (lesson.id === 'kill-the-fillers') {
+      handleViewChange(AppView.KILL_FILLERS);
+      return;
+    }
     setActiveLesson(lesson);
     handleViewChange(AppView.LESSON);
     
@@ -349,6 +357,11 @@ function AppContent() {
   }, [handleViewChange, rhetor]);
 
   const handleStartLessonById = useCallback((lessonId: string) => {
+    // Special: "Kill the Fillers" launches the interactive game
+    if (lessonId === 'kill-the-fillers') {
+      handleViewChange(AppView.KILL_FILLERS);
+      return;
+    }
     const found = academyLessons.find(l => l.id === lessonId);
     if (!found) return;
     const legacy: Lesson = {
@@ -378,6 +391,11 @@ function AppContent() {
 
   const handleLessonExit = useCallback(() => {
     setActiveLesson(null);
+    handleViewChange(AppView.AGORA);
+    rhetor.setMode('welcomer');
+  }, [handleViewChange, rhetor]);
+
+  const handleKillFillersExit = useCallback(() => {
     handleViewChange(AppView.AGORA);
     rhetor.setMode('welcomer');
   }, [handleViewChange, rhetor]);
@@ -519,6 +537,13 @@ function AppContent() {
             lesson={activeLesson}
             onExit={handleLessonExit}
             onNextLesson={handleNextLesson}
+          />
+        )}
+
+        {localView === AppView.KILL_FILLERS && (
+          <ViewKillFillers
+            key="kill-fillers"
+            onExit={handleKillFillersExit}
           />
         )}
 
