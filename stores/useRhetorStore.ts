@@ -49,6 +49,13 @@ export interface DrillProgress {
   bestScore?: number;
 }
 
+export interface PracticeSessionRecord {
+  timestamp: number;
+  topic: string;
+  durationSeconds: number;
+  score?: number;
+}
+
 export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'reconnecting' | 'error' | 'closed';
 
 export type AIMode = 'welcomer' | 'coach_lesson' | 'coach_warmup' | 'coach_practice' | 'interviewer' | 'analyst' | 'idle';
@@ -107,6 +114,7 @@ interface SessionSlice {
   transcript: string;
   lastFillerTimestamp: number | null;
   recentFillerWord: string | null;
+  sessionHistory: PracticeSessionRecord[];
   
   // Actions
   startSession: () => void;
@@ -115,6 +123,7 @@ interface SessionSlice {
   addFillerEvent: (word: string, position: number) => void;
   updateMetrics: (partial: Partial<SessionMetrics>) => void;
   clearSession: () => void;
+  addSessionToHistory: (record: PracticeSessionRecord) => void;
 }
 
 interface AISlice {
@@ -537,6 +546,18 @@ export const useRhetorStore = create<RhetorStore>()(
         });
       },
 
+      sessionHistory: [],
+
+      addSessionToHistory: (record: PracticeSessionRecord) => {
+        set((state) => {
+          state.sessionHistory.push(record);
+          // Keep only last 20 sessions
+          if (state.sessionHistory.length > 20) {
+            state.sessionHistory = state.sessionHistory.slice(-20);
+          }
+        });
+      },
+
       // ========================================================================
       // AI SLICE
       // ========================================================================
@@ -773,6 +794,7 @@ export const useRhetorStore = create<RhetorStore>()(
         completedDrills: state.completedDrills,
         completedSkills: state.completedSkills,
         pillarProgress: state.pillarProgress,
+        sessionHistory: state.sessionHistory,
       }),
     }
   )

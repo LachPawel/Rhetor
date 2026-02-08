@@ -28,6 +28,7 @@ import { AppView, type Lesson, type PitchOption, type SessionResult } from './ty
 import { useRhetorStore } from './stores/useRhetorStore';
 import { useRhetorContext, RhetorProvider } from './lib/useRhetor';
 import { getToolHandler } from './lib/tool_handler';
+import { lessons as academyLessons } from './src/data/lessons';
 
 // ============================================================================
 // ERROR BOUNDARY
@@ -286,10 +287,13 @@ function AppContent() {
   const [activeLesson, setActiveLesson] = useState<Lesson | null>(null);
   const [selectedPitch, setSelectedPitch] = useState<PitchOption | null>(null);
   const [sessionResult, setSessionResult] = useState<SessionResult | null>(null);
+  const [warmupJustCompleted, setWarmupJustCompleted] = useState(false);
 
   // Zustand store
   const storeView = useRhetorStore(s => s.currentView);
   const navigate = useRhetorStore(s => s.navigate);
+  const clearSession = useRhetorStore(s => s.clearSession);
+  const addSessionToHistory = useRhetorStore(s => s.addSessionToHistory);
 
   // Sync store view with local view
   useEffect(() => {
@@ -344,6 +348,21 @@ function AppContent() {
     });
   }, [handleViewChange, rhetor]);
 
+  const handleStartLessonById = useCallback((lessonId: string) => {
+    const found = academyLessons.find(l => l.id === lessonId);
+    if (!found) return;
+    const legacy: Lesson = {
+      id: found.id,
+      pillarId: found.pillar,
+      title: found.title,
+      description: found.description,
+      type: 'LESSON',
+      reward: found.drachmas,
+      durationMinutes: Math.ceil(found.duration / 60),
+    };
+    handleLessonSelect(legacy);
+  }, [handleLessonSelect]);
+
   const handleNextLesson = useCallback((lesson: Lesson) => {
     setActiveLesson(lesson);
     rhetor.setMode('coach_lesson', {
@@ -365,12 +384,21 @@ function AppContent() {
 
   const handlePracticeEnd = useCallback((result: SessionResult) => {
     setSessionResult(result);
+    // Save to session history
+    const topic = useRhetorStore.getState().pitchTopic || 'Freestyle';
+    addSessionToHistory({
+      timestamp: Date.now(),
+      topic,
+      durationSeconds: result.durationSeconds,
+      score: Math.max(0, Math.min(100, Math.round(100 - result.fillersCount * 5))),
+    });
     handleViewChange(AppView.REVIEW);
     // Note: ViewReview handles setMode(ANALYST) with context data
-  }, [handleViewChange]);
+  }, [handleViewChange, addSessionToHistory]);
 
   const handleWarmupComplete = useCallback(() => {
-    handleViewChange(AppView.PREP);
+    setWarmupJustCompleted(true);
+    handleViewChange(AppView.HOME);
   }, [handleViewChange]);
 
   const handleWarmupExit = useCallback(() => {
@@ -424,11 +452,55 @@ function AppContent() {
         <NavigationConfirmModal />
       </AnimatePresence>
 
+      {/* Warm-up Completion Choice */}
+      <AnimatePresence>
+        {warmupJustCompleted && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4"
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              className="bg-white rounded-xl p-8 max-w-sm w-full shadow-xl text-center"
+            >
+              <div className="text-4xl mb-4">✨</div>
+              <h3 className="font-serif text-xl font-medium mb-2">Ready to speak?</h3>
+              <p className="text-stone-500 text-sm mb-6">
+                Your warm-up is complete. What would you like to do next?
+              </p>
+              <div className="flex flex-col gap-3">
+                <button
+                  onClick={() => {
+                    setWarmupJustCompleted(false);
+                    handleViewChange(AppView.INPUT);
+                  }}
+                  className="w-full flex items-center justify-center gap-2 py-3 bg-slate-700 text-white rounded-lg font-medium text-sm hover:bg-slate-800 transition-colors"
+                >
+                  📝 Prepare Content
+                </button>
+                <button
+                  onClick={() => {
+                    setWarmupJustCompleted(false);
+                    handleViewChange(AppView.PRACTICE);
+                  }}
+                  className="w-full flex items-center justify-center gap-2 py-3 border border-stone-300 text-stone-700 rounded-lg font-medium text-sm hover:bg-stone-50 transition-colors"
+                >
+                  🎤 Quick Practice
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Views */}
       <AnimatePresence mode="wait">
         {/* Tab Views */}
         {localView === AppView.HOME && (
-          <ViewHome key="home" onChangeView={handleViewChange} />
+          <ViewHome key="home" onChangeView={handleViewChange} onStartLesson={handleStartLessonById} />
         )}
         {localView === AppView.AGORA && (
           <ViewAgora key="agora" onSelectLesson={handleLessonSelect} />
@@ -484,8 +556,15 @@ function AppContent() {
         {localView === AppView.REVIEW && (
           <ViewReview
             key="review"
-            onReset={() => handleViewChange(AppView.HOME)}
-            onPracticeAgain={() => handleViewChange(AppView.PREP)}
+            onReset={() => {
+              clearSession();
+              handleViewChange(AppView.HOME);
+              rhetor.setMode('welcomer');
+            }}
+            onPracticeAgain={() => {
+              clearSession();
+              handleViewChange(AppView.PRACTICE);
+            }}
           />
         )}
       </AnimatePresence>

@@ -26,16 +26,21 @@ export const ViewPractice: React.FC<ViewPracticeProps> = ({ pitchOption, onEnd }
   const liveWpm = useRhetorStore((s) => s.currentMetrics?.wpm ?? 0);
   const fillerCount = useRhetorStore((s) => s.currentMetrics?.fillerCount ?? 0);
   const recentFillerWord = useRhetorStore((s) => s.recentFillerWord);
+  const setNavigationBlocked = useRhetorStore((s) => s.setNavigationBlocked);
   const [fillerFlash, setFillerFlash] = useState(false);
   const duration = pitchOption?.durationSeconds || 120;
   const [timeLeft, setTimeLeft] = useState(duration);
   const [stream, setStream] = useState<MediaStream | null>(null);
 
-  // ── Start metrics session on mount ───────────────────────────────
+  // ── Start metrics session on mount, enable nav guard ─────────────
   useEffect(() => {
     startSession();
-    return () => { endSession(); };
-  }, [startSession, endSession]);
+    setNavigationBlocked(true);
+    return () => {
+      endSession();
+      setNavigationBlocked(false);
+    };
+  }, [startSession, endSession, setNavigationBlocked]);
 
   // ── Teleprompter matcher (auto-advance) ──────────────────────────
   const matcherRef = useRef(createTeleprompterMatcher());
