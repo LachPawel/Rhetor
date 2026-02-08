@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FadeTransition } from './FadeTransition.tsx';
-import { X, Wind, Pause, ArrowDown, ChevronRight, Music, Waves, Type, SkipForward } from 'lucide-react';
+import { X, Wind, Pause, ArrowDown, ChevronRight, Music, Waves, Type, SkipForward, Hand, Crown, Footprints, Sparkles, Coins } from 'lucide-react';
 import { useRhetor } from '../contexts/RhetorContext.tsx';
 import { AgentMode } from '../types.ts';
 import {
@@ -71,6 +71,59 @@ const TWISTER_AUTO_ADVANCE = 20; // seconds per twister
 
 const TOTAL_VOICE_DURATION = VOICE_EXERCISES.reduce((s, e) => s + e.duration, 0);
 
+// ── Body exercise config ────────────────────────────────────────────────
+type BodyExerciseId = 'tension-release' | 'power-pose' | 'grounding';
+
+interface BodySubStep {
+  instruction: string;
+  duration: number; // seconds
+}
+
+interface BodyExercise {
+  id: BodyExerciseId;
+  title: string;
+  icon: React.ReactNode;
+  totalDuration: number;
+  subSteps: BodySubStep[];
+  showCamera?: boolean;
+}
+
+const BODY_EXERCISES: BodyExercise[] = [
+  {
+    id: 'tension-release',
+    title: 'Tension Release',
+    icon: <Hand className="w-5 h-5" />,
+    totalDuration: 30,
+    subSteps: [
+      { instruction: 'Scrunch your face tight — hold 5s — release', duration: 10 },
+      { instruction: 'Shrug shoulders to ears — hold 5s — drop', duration: 10 },
+      { instruction: 'Shake out your hands', duration: 10 },
+    ],
+  },
+  {
+    id: 'power-pose',
+    title: 'Power Pose',
+    icon: <Crown className="w-5 h-5" />,
+    totalDuration: 45,
+    showCamera: true,
+    subSteps: [
+      { instruction: 'Stand tall. Hands on hips. Chin up.', duration: 45 },
+    ],
+  },
+  {
+    id: 'grounding',
+    title: 'Grounding',
+    icon: <Footprints className="w-5 h-5" />,
+    totalDuration: 15,
+    subSteps: [
+      { instruction: 'Feel your feet on the floor. One deep breath. You are ready.', duration: 15 },
+    ],
+  },
+];
+
+const TOTAL_BODY_DURATION = BODY_EXERCISES.reduce((s, e) => s + e.totalDuration, 0);
+const DRACHMA_REWARD = 15;
+
 // ── Circle animation config per detected phase ─────────────────────────
 const PHASE_CIRCLE: Record<BreathPhase, { scale: number; opacity: number; borderColor: string }> = {
   idle:    { scale: 1,    opacity: 0.3, borderColor: 'rgba(168,162,158,0.4)' },
@@ -97,7 +150,7 @@ const PhaseIcon: React.FC<{ phase: BreathPhase }> = ({ phase }) => {
 };
 
 export const ViewWarmUp: React.FC<ViewWarmUpProps> = ({ onComplete, onExit }) => {
-  const { setMode, isConnected, volume } = useRhetor();
+  const { setMode, isConnected, volume, addDrachmas } = useRhetor();
   const [stageIndex, setStageIndex] = useState(0);
   const currentStage = STAGES[stageIndex];
   
@@ -122,6 +175,15 @@ export const ViewWarmUp: React.FC<ViewWarmUpProps> = ({ onComplete, onExit }) =>
   const [twisterIdx, setTwisterIdx] = useState(0);
   const [voiceCompleted, setVoiceCompleted] = useState(false);
   const voiceAutoRef = useRef(false);
+
+  // ── Body exercise state ───────────────────────────────────────────────
+  const [bodyExIndex, setBodyExIndex] = useState(0);
+  const [bodySubStep, setBodySubStep] = useState(0);
+  const [bodyTimer, setBodyTimer] = useState(0);
+  const [bodyRunning, setBodyRunning] = useState(false);
+  const [bodyCompleted, setBodyCompleted] = useState(false);
+  const [showReward, setShowReward] = useState(false);
+  const bodyAutoRef = useRef(false);
 
   // Set mode when connected - only run once when isConnected becomes true
   const modeSetRef = useRef(false);
@@ -292,12 +354,104 @@ export const ViewWarmUp: React.FC<ViewWarmUpProps> = ({ onComplete, onExit }) =>
     return elapsed;
   })();
 
-  // Camera Logic for BODY stage only
+  // ── Body exercise countdown timer ─────────────────────────────────────
+  useEffect(() => {
+    if (currentStage.id !== 'body' || !bodyRunning || bodyTimer <= 0) return;
+    const t = setInterval(() => {
+      setBodyTimer(prev => {
+        if (prev <= 1) {
+          clearInterval(t);
+          // Sub-step finished — advance to next sub-step or next exercise
+          const ex = BODY_EXERCISES[bodyExIndex];
+          const nextSub = bodySubStep + 1;
+          if (nextSub < ex.subSteps.length) {
+            setBodySubStep(nextSub);
+            return ex.subSteps[nextSub].duration;
+          }
+          // Exercise done — advance
+          const nextEx = bodyExIndex + 1;
+          if (nextEx < BODY_EXERCISES.length) {
+            setBodyExIndex(nextEx);
+            setBodySubStep(0);
+            return BODY_EXERCISES[nextEx].subSteps[0].duration;
+          }
+          // All done
+          setBodyRunning(false);
+          if (!bodyAutoRef.current) {
+            bodyAutoRef.current = true;
+            setBodyCompleted(true);
+          }
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(t);
+  }, [currentStage.id, bodyRunning, bodyTimer, bodyExIndex, bodySubStep]);
+
+  // Reset body state when entering body stage
+  useEffect(() => {
+    if (currentStage.id === 'body') {
+      setBodyExIndex(0);
+      setBodySubStep(0);
+      setBodyTimer(0);
+      setBodyRunning(false);
+      setBodyCompleted(false);
+      setShowReward(false);
+      bodyAutoRef.current = false;
+    }
+  }, [currentStage.id]);
+
+  // Award drachmas and show reward when body stage completed
+  useEffect(() => {
+    if (!bodyCompleted) return;
+    const t = setTimeout(() => {
+      addDrachmas(DRACHMA_REWARD);
+      setShowReward(true);
+    }, 600);
+    return () => clearTimeout(t);
+  }, [bodyCompleted]);
+
+  // Auto-finish warm-up after reward shown
+  useEffect(() => {
+    if (!showReward) return;
+    const t = setTimeout(() => {
+      onComplete();
+    }, 2500);
+    return () => clearTimeout(t);
+  }, [showReward, onComplete]);
+
+  const startBodyExercise = useCallback(() => {
+    const first = BODY_EXERCISES[0].subSteps[0];
+    setBodyTimer(first.duration);
+    setBodySubStep(0);
+    setBodyExIndex(0);
+    setBodyRunning(true);
+  }, []);
+
+  /** Total elapsed time across body exercises (for overall progress bar) */
+  const bodyElapsed = (() => {
+    let elapsed = 0;
+    for (let i = 0; i < bodyExIndex; i++) elapsed += BODY_EXERCISES[i].totalDuration;
+    if (bodyRunning && BODY_EXERCISES[bodyExIndex]) {
+      const ex = BODY_EXERCISES[bodyExIndex];
+      for (let s = 0; s < bodySubStep; s++) elapsed += ex.subSteps[s].duration;
+      if (ex.subSteps[bodySubStep]) {
+        elapsed += ex.subSteps[bodySubStep].duration - bodyTimer;
+      }
+    }
+    return elapsed;
+  })();
+
+  // Does the current body exercise need the camera?
+  const bodyNeedsCamera = bodyRunning && BODY_EXERCISES[bodyExIndex]?.showCamera;
+
+  // Camera Logic for BODY stage (activates for power-pose sub-exercise)
   useEffect(() => {
     let localStream: MediaStream | null = null;
     let mounted = true;
 
-    if (currentStage.id === 'body') {
+    if (currentStage.id === 'body' && bodyNeedsCamera) {
       navigator.mediaDevices.getUserMedia({ video: true })
         .then(s => {
           if (!mounted) {
@@ -310,7 +464,7 @@ export const ViewWarmUp: React.FC<ViewWarmUpProps> = ({ onComplete, onExit }) =>
         })
         .catch(console.error);
     } else {
-      // Not body stage - ensure stream is stopped
+      // Not needed — ensure stream is stopped
       if (stream) {
         stream.getTracks().forEach(t => t.stop());
         setStream(null);
@@ -323,7 +477,7 @@ export const ViewWarmUp: React.FC<ViewWarmUpProps> = ({ onComplete, onExit }) =>
         localStream.getTracks().forEach(t => t.stop());
       }
     };
-  }, [currentStage.id]);
+  }, [currentStage.id, bodyNeedsCamera]);
 
   const handleNext = () => {
     if (stageIndex < STAGES.length - 1) {
@@ -630,22 +784,196 @@ export const ViewWarmUp: React.FC<ViewWarmUpProps> = ({ onComplete, onExit }) =>
 
              {/* ───── BODY STAGE ───── */}
              {currentStage.id === 'body' && (
-                 <motion.div key="body" initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} className="w-full">
-                    <div className="relative w-full aspect-video bg-black rounded-sm overflow-hidden mb-8">
-                        {stream && <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover transform -scale-x-100" />}
+                 <motion.div
+                   key="body"
+                   initial={{ opacity: 0 }}
+                   animate={{ opacity: 1 }}
+                   exit={{ opacity: 0 }}
+                   className="flex flex-col items-center w-full"
+                 >
+                    <h2 className="text-4xl font-serif font-light mb-1">Body</h2>
+                    <p className="text-stone-500 font-serif italic mb-6">Release tension, stand strong</p>
+
+                    {/* Overall progress bar */}
+                    <div className="w-full max-w-xs mb-8">
+                      <div className="flex items-center justify-between text-[10px] text-stone-400 uppercase tracking-widest mb-1.5">
+                        {BODY_EXERCISES.map((ex, i) => (
+                          <span
+                            key={ex.id}
+                            className={`${
+                              i < bodyExIndex ? 'text-emerald-600' : i === bodyExIndex && bodyRunning ? 'text-stone-900 font-medium' : ''
+                            }`}
+                          >
+                            {ex.title}
+                          </span>
+                        ))}
+                      </div>
+                      <div className="h-1 bg-stone-200 rounded-full overflow-hidden">
+                        <motion.div
+                          className="h-full bg-stone-900 rounded-full"
+                          animate={{ width: `${(bodyElapsed / TOTAL_BODY_DURATION) * 100}%` }}
+                          transition={{ duration: 0.4 }}
+                        />
+                      </div>
                     </div>
-                    <h2 className="text-4xl font-serif font-light mb-2">Body</h2>
-                    <p className="text-stone-500 font-serif italic">Stand tall.</p>
+
+                    {/* Reward / completion overlay */}
+                    {showReward ? (
+                      <motion.div
+                        initial={{ opacity: 0, scale: 0.9 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        className="flex flex-col items-center py-8"
+                      >
+                        <motion.div
+                          initial={{ scale: 0 }}
+                          animate={{ scale: 1 }}
+                          transition={{ type: 'spring', stiffness: 260, damping: 20, delay: 0.15 }}
+                          className="w-20 h-20 rounded-full bg-emerald-50 flex items-center justify-center mb-4"
+                        >
+                          <Sparkles className="w-10 h-10 text-emerald-600" />
+                        </motion.div>
+                        <h3 className="text-2xl font-serif font-light mb-2">Warm-up Complete!</h3>
+                        <div className="flex items-center gap-1.5 text-amber-600">
+                          <Coins className="w-4 h-4" />
+                          <span className="text-sm font-medium">+{DRACHMA_REWARD} drachmas earned</span>
+                        </div>
+                      </motion.div>
+                    ) : bodyCompleted ? (
+                      <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        className="flex flex-col items-center py-8"
+                      >
+                        <div className="w-16 h-16 rounded-full border-2 border-emerald-300 flex items-center justify-center mb-3 animate-pulse">
+                          <Footprints className="w-8 h-8 text-emerald-600" />
+                        </div>
+                        <p className="text-lg font-serif text-stone-700">You are ready.</p>
+                      </motion.div>
+                    ) : (
+                      /* Exercise content */
+                      <AnimatePresence mode="wait">
+                        {(() => {
+                          const ex = BODY_EXERCISES[bodyExIndex];
+                          if (!ex) return null;
+                          const step = ex.subSteps[bodySubStep];
+
+                          return (
+                            <motion.div
+                              key={`${ex.id}-${bodySubStep}`}
+                              initial={{ opacity: 0, y: 12 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              exit={{ opacity: 0, y: -12 }}
+                              transition={{ duration: 0.3 }}
+                              className="flex flex-col items-center"
+                            >
+                              {/* Exercise icon + title */}
+                              <div className="flex items-center gap-2 text-stone-600 mb-3">
+                                {ex.icon}
+                                <span className="text-sm uppercase tracking-widest font-medium">{ex.title}</span>
+                              </div>
+
+                              {/* Camera feed for power pose */}
+                              {ex.showCamera && bodyRunning && stream && (
+                                <div className="relative w-full max-w-xs aspect-[3/4] bg-black rounded-lg overflow-hidden mb-5">
+                                  <video
+                                    ref={videoRef}
+                                    autoPlay
+                                    playsInline
+                                    muted
+                                    className="w-full h-full object-cover transform -scale-x-100"
+                                  />
+                                  {/* Silhouette overlay hint */}
+                                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                                    <div className="w-24 h-32 border-2 border-dashed border-white/20 rounded-xl" />
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Power-pose silhouette icon when camera not available */}
+                              {ex.showCamera && bodyRunning && !stream && (
+                                <div className="w-32 h-40 rounded-xl bg-stone-100 flex items-center justify-center mb-5">
+                                  <Crown className="w-12 h-12 text-stone-300" />
+                                </div>
+                              )}
+
+                              {/* Instruction text */}
+                              {step && (
+                                <p className="text-lg text-stone-800 font-serif mb-6 max-w-sm leading-relaxed text-center">
+                                  {step.instruction}
+                                </p>
+                              )}
+
+                              {/* Grounding calm animation */}
+                              {ex.id === 'grounding' && bodyRunning && (
+                                <motion.div
+                                  className="w-24 h-24 rounded-full border-2 border-stone-200 mb-4"
+                                  animate={{ scale: [1, 1.15, 1], opacity: [0.4, 0.8, 0.4] }}
+                                  transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
+                                />
+                              )}
+
+                              {/* Sub-step pips (for tension release) */}
+                              {ex.subSteps.length > 1 && bodyRunning && (
+                                <div className="flex gap-2 mb-4">
+                                  {ex.subSteps.map((_, i) => (
+                                    <div
+                                      key={i}
+                                      className={`w-2 h-2 rounded-full transition-colors duration-300 ${
+                                        i < bodySubStep
+                                          ? 'bg-emerald-500'
+                                          : i === bodySubStep
+                                            ? 'bg-stone-900 animate-pulse'
+                                            : 'bg-stone-200'
+                                      }`}
+                                    />
+                                  ))}
+                                </div>
+                              )}
+
+                              {/* Timer */}
+                              {bodyRunning && (
+                                <div className="flex flex-col items-center mb-4">
+                                  <span className="text-3xl font-light tabular-nums text-stone-900">
+                                    {String(Math.floor(bodyTimer / 60)).padStart(1, '0')}:{String(bodyTimer % 60).padStart(2, '0')}
+                                  </span>
+                                  <div className="w-40 h-0.5 bg-stone-200 rounded-full mt-2 overflow-hidden">
+                                    <motion.div
+                                      className="h-full bg-stone-600 rounded-full"
+                                      animate={{ width: step ? `${((step.duration - bodyTimer) / step.duration) * 100}%` : '0%' }}
+                                      transition={{ duration: 0.8 }}
+                                    />
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Start button */}
+                              {!bodyRunning && !bodyCompleted && (
+                                <button
+                                  onClick={startBodyExercise}
+                                  className="px-5 py-2 bg-stone-900 text-stone-50 rounded-full text-sm uppercase tracking-widest hover:bg-stone-800 transition-colors"
+                                >
+                                  Start
+                                </button>
+                              )}
+                            </motion.div>
+                          );
+                        })()}
+                      </AnimatePresence>
+                    )}
                  </motion.div>
              )}
          </AnimatePresence>
       </div>
 
       <div className="w-full max-w-md z-20 flex flex-col items-center gap-4">
-          <p className="text-xs text-stone-400 uppercase tracking-widest animate-pulse">Rhetor is guiding you...</p>
-          <button onClick={handleNext} className="text-stone-900 border-b border-stone-900 pb-1 text-sm uppercase tracking-widest">
-              Next Stage →
-          </button>
+          {!bodyCompleted && (
+            <p className="text-xs text-stone-400 uppercase tracking-widest animate-pulse">Rhetor is guiding you...</p>
+          )}
+          {!bodyCompleted && (
+            <button onClick={handleNext} className="text-stone-900 border-b border-stone-900 pb-1 text-sm uppercase tracking-widest">
+                {stageIndex < STAGES.length - 1 ? 'Next Stage →' : 'Finish →'}
+            </button>
+          )}
       </div>
     </FadeTransition>
   );
