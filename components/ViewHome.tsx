@@ -27,19 +27,9 @@ export const ViewHome: React.FC<ViewHomeProps> = ({ onChangeView }) => {
   return (
     <FadeTransition className="flex flex-col min-h-screen pb-20 bg-stone-50 text-stone-900">
       
-      {/* Top Bar */}
-      <div className="px-6 pt-6 pb-4 flex justify-between items-center bg-stone-50/80 backdrop-blur sticky top-0 z-10">
+      {/* Top Bar - Minimal */}
+      <div className="px-6 pt-8 pb-4">
           <h1 className="text-2xl serif font-bold text-stone-900">Rhetor</h1>
-          <div className="flex items-center gap-4">
-              <div className="flex items-center gap-1.5 text-orange-600">
-                  <Flame className="w-4 h-4 fill-current" />
-                  <span className="text-sm font-mono font-bold">{user.streak}</span>
-              </div>
-              <div className="flex items-center gap-1.5 text-amber-600">
-                  <Coins className="w-4 h-4 fill-current" />
-                  <span className="text-sm font-mono font-bold">{user.drachmas}</span>
-              </div>
-          </div>
       </div>
 
       <div className="px-6 flex-1 flex flex-col gap-6">
