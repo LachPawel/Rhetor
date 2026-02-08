@@ -3,7 +3,7 @@ import React, { useEffect } from 'react';
 import { FadeTransition } from './FadeTransition.tsx';
 import { AppView, AgentMode } from '../types.ts';
 import { useRhetor } from '../contexts/RhetorContext.tsx';
-import { Target } from 'lucide-react';
+import { Target, Wind, PenTool, Mic, Users, Flame, Coins } from 'lucide-react';
 import { useRhetorStore } from '../stores/useRhetorStore';
 
 interface ViewHomeProps {
@@ -11,7 +11,7 @@ interface ViewHomeProps {
 }
 
 export const ViewHome: React.FC<ViewHomeProps> = ({ onChangeView }) => {
-  const { connect, isConnected, isConnecting, setMode, user } = useRhetor();
+  const { connect, isConnected, isConnecting, setMode, user, talkingPoints } = useRhetor();
 
   useEffect(() => {
     if (isConnected) {
@@ -25,10 +25,14 @@ export const ViewHome: React.FC<ViewHomeProps> = ({ onChangeView }) => {
     onChangeView(AppView.WARMUP);
   };
   
-  // Connect before practice
+  // Connect before practice — redirect to INPUT if no talking points
   const handlePractice = async () => {
     if (!isConnected) await connect();
-    onChangeView(AppView.PRACTICE);
+    if (!talkingPoints || talkingPoints.length === 0) {
+      onChangeView(AppView.INPUT);
+    } else {
+      onChangeView(AppView.PRACTICE);
+    }
   };
 
   // Connect before simulation
@@ -43,8 +47,18 @@ export const ViewHome: React.FC<ViewHomeProps> = ({ onChangeView }) => {
       <div className="px-6 pt-12 flex-1 flex flex-col justify-start gap-8">
         
         {/* Header */}
-        <div className="flex items-center justify-center mb-4">
+        <div className="flex items-center justify-between mb-4">
              <h1 className="font-serif text-3xl tracking-tight text-stone-800">Rhetor</h1>
+             <div className="flex items-center gap-4">
+                 <div className="flex items-center gap-1.5 text-orange-600">
+                     <Flame className="w-4 h-4 fill-current" />
+                     <span className="text-sm font-mono font-bold">{user.streak}</span>
+                 </div>
+                 <div className="flex items-center gap-1.5 text-amber-600">
+                     <Coins className="w-4 h-4 fill-current" />
+                     <span className="text-sm font-mono font-bold">{user.drachmas}</span>
+                 </div>
+             </div>
         </div>
 
         {/* Today's Challenge */}
@@ -61,28 +75,40 @@ export const ViewHome: React.FC<ViewHomeProps> = ({ onChangeView }) => {
 
         {/* Quick Actions Grid */}
         <div className="grid grid-cols-2 gap-4">
-            <button onClick={handleWarmUp} className="p-4 bg-white/60 backdrop-blur-md border border-stone-200 rounded-lg shadow-sm hover:border-stone-400 hover:bg-white/80 transition-all text-left flex flex-col justify-end h-32">
+            <button onClick={handleWarmUp} className="p-4 bg-white/60 backdrop-blur-md border border-stone-200 rounded-lg shadow-sm hover:border-stone-400 hover:bg-white/80 transition-all text-left flex flex-col justify-between h-32">
+                <div className="w-8 h-8 rounded-full bg-stone-100 flex items-center justify-center">
+                    <Wind className="w-4 h-4 text-stone-600" />
+                </div>
                 <div>
                     <h4 className="font-serif text-lg leading-none mb-1">Warm Up</h4>
                     <p className="text-xs text-stone-500">Breathe & focus</p>
                 </div>
             </button>
 
-            <button onClick={() => onChangeView(AppView.PREP)} className="p-4 bg-white/60 backdrop-blur-md border border-stone-200 rounded-lg shadow-sm hover:border-stone-400 hover:bg-white/80 transition-all text-left flex flex-col justify-end h-32">
+            <button onClick={() => onChangeView(AppView.INPUT)} className="p-4 bg-white/60 backdrop-blur-md border border-stone-200 rounded-lg shadow-sm hover:border-stone-400 hover:bg-white/80 transition-all text-left flex flex-col justify-between h-32">
+                <div className="w-8 h-8 rounded-full bg-stone-100 flex items-center justify-center">
+                    <PenTool className="w-4 h-4 text-stone-600" />
+                </div>
                 <div>
                     <h4 className="font-serif text-lg leading-none mb-1">Prepare</h4>
                     <p className="text-xs text-stone-500">Build content</p>
                 </div>
             </button>
 
-            <button onClick={handlePractice} className="p-4 bg-white/60 backdrop-blur-md border border-stone-200 rounded-lg shadow-sm hover:border-stone-400 hover:bg-white/80 transition-all text-left flex flex-col justify-end h-32">
+            <button onClick={handlePractice} className="p-4 bg-white/60 backdrop-blur-md border border-stone-200 rounded-lg shadow-sm hover:border-stone-400 hover:bg-white/80 transition-all text-left flex flex-col justify-between h-32">
+                <div className="w-8 h-8 rounded-full bg-stone-100 flex items-center justify-center">
+                    <Mic className="w-4 h-4 text-stone-600" />
+                </div>
                 <div>
                     <h4 className="font-serif text-lg leading-none mb-1">Practice</h4>
                     <p className="text-xs text-stone-500">Deliver your talk</p>
                 </div>
             </button>
 
-            <button onClick={handleSimulation} className="p-4 bg-white/60 backdrop-blur-md border border-stone-200 rounded-lg shadow-sm hover:border-stone-400 hover:bg-white/80 transition-all text-left flex flex-col justify-end h-32">
+            <button onClick={handleSimulation} className="p-4 bg-white/60 backdrop-blur-md border border-stone-200 rounded-lg shadow-sm hover:border-stone-400 hover:bg-white/80 transition-all text-left flex flex-col justify-between h-32">
+                <div className="w-8 h-8 rounded-full bg-stone-100 flex items-center justify-center">
+                    <Users className="w-4 h-4 text-stone-600" />
+                </div>
                 <div>
                     <h4 className="font-serif text-lg leading-none mb-1">Simulation</h4>
                     <p className="text-xs text-stone-500">Face the audience</p>

@@ -195,12 +195,14 @@ export const ViewWarmUp: React.FC<ViewWarmUpProps> = ({ onComplete, onExit }) =>
   const [showReward, setShowReward] = useState(false);
   const bodyAutoRef = useRef(false);
 
-  // Set mode when connected - only run once when isConnected becomes true
+  // Set mode when connected - reset on disconnect so it re-fires after reconnection
   const modeSetRef = useRef(false);
   useEffect(() => {
     if (isConnected && !modeSetRef.current) {
       modeSetRef.current = true;
       setMode(AgentMode.COACH_WARMUP);
+    } else if (!isConnected) {
+      modeSetRef.current = false;
     }
   }, [isConnected, setMode]);
 

@@ -494,9 +494,12 @@ export const useRhetorStore = create<RhetorStore>()(
           state.transcript = text;
           if (state.currentMetrics) {
             state.currentMetrics.wordsSpoken = text.split(/\s+/).filter(Boolean).length;
-            if (state.currentMetrics.duration > 0) {
+            // Calculate duration live from startTime (don't wait for endSession)
+            const liveDuration = Date.now() - state.currentMetrics.startTime;
+            if (liveDuration > 0) {
+              state.currentMetrics.duration = liveDuration;
               state.currentMetrics.wpm = Math.round(
-                (state.currentMetrics.wordsSpoken / state.currentMetrics.duration) * 60000
+                (state.currentMetrics.wordsSpoken / liveDuration) * 60000
               );
             }
           }

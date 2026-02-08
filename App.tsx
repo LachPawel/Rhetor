@@ -1,7 +1,7 @@
 
 import React, { useState, Component, ReactNode } from 'react';
 import { AnimatePresence } from 'framer-motion';
-import { AppView, PitchOption, SessionResult, Lesson } from './types.ts';
+import { AppView, SessionResult, Lesson } from './types.ts';
 import { ViewHome } from './components/ViewHome.tsx';
 import { ViewAgora } from './components/ViewAgora.tsx';
 import { ViewSymposium } from './components/ViewSymposium.tsx';
@@ -9,6 +9,7 @@ import { ViewProfile } from './components/ViewProfile.tsx';
 import { ViewLesson } from './components/ViewLesson.tsx';
 import { ViewWarmUp } from './components/ViewWarmUp.tsx';
 import { ViewPrep } from './components/ViewPrep.tsx';
+import { ViewInput } from './components/ViewInput.tsx';
 import { ViewPractice } from './components/ViewPractice.tsx';
 import { ViewSimulation } from './components/ViewSimulation.tsx';
 import { ViewReview } from './components/ViewReview.tsx';
@@ -23,6 +24,7 @@ import {
 } from './components/AppOverlays.tsx';
 import { AlertTriangle } from 'lucide-react';
 import { RhetorProvider } from './contexts/RhetorContext.tsx';
+import { useRhetorStore } from './stores/useRhetorStore.ts';
 import { AIStatusOrb } from './components/AIStatusOrb.tsx';
 
 // Error Boundary (Keep existing)
@@ -48,13 +50,13 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
 const AppContent: React.FC = () => {
   const [currentView, setCurrentView] = useState<AppView>(AppView.LANDING);
   const [activeLesson, setActiveLesson] = useState<Lesson | null>(null);
-  const [selectedPitch, setSelectedPitch] = useState<PitchOption | null>(null);
   const [sessionResult, setSessionResult] = useState<SessionResult | null>(null);
 
   // Full screen modes hide the bottom nav
   const isFullScreen = [
       AppView.LANDING,
-      AppView.WARMUP, 
+      AppView.WARMUP,
+      AppView.INPUT,
       AppView.PREP, 
       AppView.PRACTICE, 
       AppView.SIMULATION,
@@ -100,15 +102,24 @@ const AppContent: React.FC = () => {
             )}
             
             {currentView === AppView.WARMUP && (
-                <ViewWarmUp key="warmup" onComplete={() => setCurrentView(AppView.PREP)} onExit={() => setCurrentView(AppView.HOME)} />
+                <ViewWarmUp key="warmup" onComplete={() => setCurrentView(AppView.INPUT)} onExit={() => setCurrentView(AppView.HOME)} />
+            )}
+
+            {currentView === AppView.INPUT && (
+                <ViewInput key="input" onChangeView={setCurrentView} />
             )}
             
             {currentView === AppView.PREP && (
-                <ViewPrep key="prep" onBegin={() => setCurrentView(AppView.PRACTICE)} onBack={() => setCurrentView(AppView.HOME)} />
+                <ViewPrep key="prep" onBegin={async (points) => {
+                  if (points && points.length > 0) {
+                    useRhetorStore.getState().setTalkingPoints(points);
+                  }
+                  setCurrentView(AppView.PRACTICE);
+                }} onBack={() => setCurrentView(AppView.INPUT)} />
             )}
             
             {currentView === AppView.PRACTICE && (
-                <ViewPractice key="practice" pitchOption={selectedPitch} onEnd={handlePracticeEnd} />
+                <ViewPractice key="practice" onEnd={handlePracticeEnd} />
             )}
 
             {currentView === AppView.SIMULATION && (

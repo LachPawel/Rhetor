@@ -38,12 +38,13 @@ export const DEFAULT_LIVE_API_MODEL = 'gemini-2.5-flash-native-audio-preview-12-
 const RECONNECT_CONFIG = {
   initialDelayMs: 1000,
   maxDelayMs: 30000,
-  maxAttempts: 5,
+  maxAttempts: 10,
   backoffMultiplier: 2,
   jitterFactor: 0.1,
 };
 
-const HEARTBEAT_INTERVAL_MS = 30000;
+const HEARTBEAT_INTERVAL_MS = 15000;
+const STALE_CONNECTION_MS = 60000; // Trigger reconnect if no messages for 60s
 const MESSAGE_QUEUE_MAX_SIZE = 100;
 
 // ============================================================================
@@ -133,6 +134,7 @@ export class GeminiLiveClient {
   private _autoReconnect: boolean = true;
   private _manualDisconnect: boolean = false;
   private _lastError: Error | null = null;
+  private _lastActivityTime: number = 0;
   private _toolHandler = getToolHandler();
 
   // ============================================================================
@@ -356,12 +358,21 @@ export class GeminiLiveClient {
    */
   private startHeartbeat(): void {
     this.clearHeartbeat();
+    this._lastActivityTime = Date.now();
     
     this._heartbeatIntervalId = setInterval(() => {
       if (this._status === 'connected' && this.session) {
-        // Send a minimal message to keep the connection alive
-        // The Gemini API doesn't have a ping, so we'll rely on the connection itself
-        this.log('client.heartbeat', 'Connection alive');
+        const elapsed = Date.now() - this._lastActivityTime;
+        if (elapsed > STALE_CONNECTION_MS) {
+          // No server messages for too long — connection is likely dead
+          this.log('client.heartbeat', `Stale connection detected (${elapsed}ms idle), reconnecting`);
+          this._manualDisconnect = false;
+          try { this.session.close(); } catch { /* ignore */ }
+          this.session = undefined;
+          this.scheduleReconnect();
+          return;
+        }
+        this.log('client.heartbeat', `Connection alive (${Math.round(elapsed / 1000)}s since last activity)`);
       }
     }, HEARTBEAT_INTERVAL_MS);
   }
@@ -537,11 +548,15 @@ export class GeminiLiveClient {
       const responses = await this._toolHandler.handleToolCall(event);
 
       const functionResponses = responses.map(r => {
-        // SDK requires: name, response (object with string values), and id
         const fc = toolCall.functionCalls.find(f => f.id === r.id);
-        const resultValue = r.response.success
-          ? (typeof r.response.result === 'string' ? r.response.result : JSON.stringify(r.response.result ?? 'ok'))
-          : (typeof r.response.error === 'string' ? r.response.error : JSON.stringify(r.response.error ?? 'error'));
+        // Sanitize result to a clean, bounded string to prevent SDK parsing errors
+        let resultValue: string;
+        try {
+          const raw = r.response.success ? (r.response.result ?? 'ok') : (r.response.error ?? 'error');
+          resultValue = (typeof raw === 'string' ? raw : JSON.stringify(raw)).slice(0, 500);
+        } catch {
+          resultValue = r.response.success ? 'ok' : 'error';
+        }
         return {
           id: r.id,
           name: fc?.name ?? 'unknown',
@@ -552,6 +567,17 @@ export class GeminiLiveClient {
       this.sendToolResponse({ functionResponses });
     } catch (e) {
       console.error('[GeminiLiveClient] Error handling tool calls:', e);
+      // Always send a response — leaving the API waiting causes disconnection
+      try {
+        const errorResponses = toolCall.functionCalls.map(fc => ({
+          id: fc.id,
+          name: fc.name,
+          response: { result: 'error: tool execution failed' },
+        }));
+        this.sendToolResponse({ functionResponses: errorResponses });
+      } catch {
+        // Cannot send error response — connection is likely dead
+      }
     }
   }
 
@@ -562,6 +588,7 @@ export class GeminiLiveClient {
   protected onOpen(): void {
     this._reconnectAttempts = 0;
     this._lastError = null;
+    this._lastActivityTime = Date.now();
     this.setStatus('connected');
     this.startHeartbeat();
     this.emitter.emit('open');
@@ -569,6 +596,8 @@ export class GeminiLiveClient {
   }
 
   protected onMessage(message: LiveServerMessage): void {
+    this._lastActivityTime = Date.now();
+
     if (message.setupComplete) {
       this.emitter.emit('setupcomplete');
       return;
@@ -597,11 +626,15 @@ export class GeminiLiveClient {
       }
 
       if (serverContent.inputTranscription) {
-        this.emitter.emit(
-          'inputTranscription',
-          serverContent.inputTranscription.text,
-          (serverContent.inputTranscription as { isFinal?: boolean }).isFinal ?? false
-        );
+        const transcriptionText = serverContent.inputTranscription.text ?? '';
+        this.log('server.inputTranscription', { text: transcriptionText });
+        if (transcriptionText) {
+          this.emitter.emit(
+            'inputTranscription',
+            transcriptionText,
+            (serverContent.inputTranscription as { isFinal?: boolean }).isFinal ?? false
+          );
+        }
       }
 
       if (serverContent.outputTranscription) {

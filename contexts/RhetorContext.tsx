@@ -53,6 +53,7 @@ export const useRhetor = (): RhetorContextType => {
     // AI output
     aiResponse: ctx.aiTranscript,
     lastTranscript: ctx.userTranscript,
+    resetTranscript: ctx.resetTranscript,
 
     // Pitch state (now in Zustand store)
     talkingPoints: store.talkingPoints,

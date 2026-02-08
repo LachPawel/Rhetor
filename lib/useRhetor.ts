@@ -59,6 +59,7 @@ export interface UseRhetorReturn {
   // Transcript
   userTranscript: string;
   aiTranscript: string;
+  resetTranscript: () => void;
   
   // State shortcuts
   drachmas: number;
@@ -90,6 +91,7 @@ export function useRhetor(options: UseRhetorOptions): UseRhetorReturn {
   const audioContextRef = useRef<AudioContext | null>(null);
   const finalizedTranscriptRef = useRef('');
   const finalizedAiTranscriptRef = useRef('');
+  const lastContextRef = useRef<string | null>(null);
   
   // Local state
   const [userTranscript, setUserTranscript] = useState('');
@@ -189,11 +191,16 @@ export function useRhetor(options: UseRhetorOptions): UseRhetorReturn {
         // Each event carries a small text fragment — always accumulate.
         // Strip control tokens like <ctrl46> that leak from the audio model.
         const trimmed = sanitizeTranscription(text);
-        if (!trimmed) return;
+        if (!trimmed) {
+          console.log('[useRhetor] inputTranscription event received but sanitized to empty, raw:', JSON.stringify(text));
+          return;
+        }
 
         const separator = finalizedTranscriptRef.current ? ' ' : '';
         finalizedTranscriptRef.current += separator + trimmed;
         setUserTranscript(finalizedTranscriptRef.current);
+
+        console.log('[useRhetor] inputTranscription:', JSON.stringify(trimmed), '| total length:', finalizedTranscriptRef.current.length);
 
         // Process for fillers
         if (enableFillerDetection) {
@@ -227,6 +234,15 @@ export function useRhetor(options: UseRhetorOptions): UseRhetorReturn {
       
       client.on('reconnected', () => {
         setError(null);
+        // Re-establish mode context on the fresh session
+        if (lastContextRef.current) {
+          setTimeout(() => {
+            if (clientRef.current?.isConnected) {
+              clientRef.current.send({ text: `CONTEXT: ${lastContextRef.current}` });
+              console.log('[useRhetor] Restored mode context after reconnection');
+            }
+          }, 500);
+        }
       });
     }
     
@@ -313,6 +329,18 @@ export function useRhetor(options: UseRhetorOptions): UseRhetorReturn {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoConnect, apiKey]);
   
+  // ============================================================================
+  // TRANSCRIPT RESET
+  // ============================================================================
+
+  const resetTranscript = useCallback(() => {
+    finalizedTranscriptRef.current = '';
+    finalizedAiTranscriptRef.current = '';
+    setUserTranscript('');
+    setAiTranscript('');
+    console.log('[useRhetor] Transcript reset');
+  }, []);
+
   // ============================================================================
   // AUDIO RECORDING
   // ============================================================================
@@ -444,7 +472,8 @@ export function useRhetor(options: UseRhetorOptions): UseRhetorReturn {
         contextJson = JSON.stringify({ mode, user, ...context });
     }
     
-    // Send context to AI
+    // Track for reconnection restoration and send to AI
+    lastContextRef.current = contextJson;
     clientRef.current.send({ text: `CONTEXT: ${contextJson}` });
   }, [setModeStore]);
   
@@ -491,6 +520,7 @@ export function useRhetor(options: UseRhetorOptions): UseRhetorReturn {
     // Transcript
     userTranscript,
     aiTranscript,
+    resetTranscript,
     
     // State shortcuts
     drachmas,

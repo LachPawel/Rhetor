@@ -36,6 +36,8 @@ export const ViewSimulation: React.FC<ViewSimulationProps> = ({ onBack }) => {
             modeSetRef.current = true;
             const persona = PERSONAS.find(p => p.id === selectedPersona)?.name || 'Audience';
             setMode(AgentMode.SIMULATION, { persona });
+        } else if (!isActive) {
+            modeSetRef.current = false;
         }
     }, [isActive, selectedPersona, setMode]);
 

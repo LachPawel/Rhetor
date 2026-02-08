@@ -8,9 +8,10 @@ export enum AppView {
   SYMPOSIUM = 'SYMPOSIUM',
   PROFILE = 'PROFILE',
   WARMUP = 'WARMUP',
-  PREP = 'PREP', // Pitch Builder
+  INPUT = 'INPUT', // Content preparation (paste/templates/AI extract)
+  PREP = 'PREP', // AI Interview pitch builder
   PRACTICE = 'PRACTICE',
-  SIMULATION = 'SIMULATION', // New audience simulation
+  SIMULATION = 'SIMULATION',
   REVIEW = 'REVIEW',
   LESSON = 'LESSON',
 }
@@ -92,6 +93,7 @@ export interface RhetorContextType {
   
   // AI State
   lastTranscript: string;
+  resetTranscript: () => void;
   aiResponse: string;
 
   // Gamification State

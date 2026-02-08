@@ -17,12 +17,14 @@ export const ViewPrep: React.FC<ViewPrepProps> = ({ onBegin, onBack }) => {
   const [method, setMethod] = useState<PrepMethod>('menu');
   const [pastedText, setPastedText] = useState('');
 
-  // Set mode only when entering interview
+  // Set mode only when entering interview - reset on disconnect
   const modeSetRef = useRef(false);
   useEffect(() => {
     if (isConnected && method === 'interview' && !modeSetRef.current) {
         modeSetRef.current = true;
         setMode(AgentMode.INTERVIEWER);
+    } else if (!isConnected) {
+        modeSetRef.current = false;
     }
   }, [isConnected, setMode, method]);
 

@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { FadeTransition } from './FadeTransition.tsx';
 import { AppView } from '../types.ts';
+import { useRhetor } from '../contexts/RhetorContext.tsx';
 import { useRhetorStore } from '../stores/useRhetorStore.ts';
 import { PITCH_TEMPLATES, type PitchTemplate } from '../src/data/templates.ts';
 
@@ -48,7 +49,7 @@ async function extractTalkingPoints(text: string): Promise<GeneratedResult> {
   const ai = new GoogleGenAI({ apiKey });
 
   const response = await ai.models.generateContent({
-    model: 'gemini-2.0-flash',
+    model: 'gemini-2.5-flash',
     contents: [
       {
         role: 'user',
@@ -283,15 +284,20 @@ export const ViewInput: React.FC<ViewInputProps> = ({ onChangeView }) => {
     [applyResult],
   );
 
-  const handleStartPractice = useCallback(() => {
+  const { connect, isConnected } = useRhetor();
+
+  const handleStartPractice = useCallback(async () => {
     // Save to store
     setTalkingPoints(bullets);
     setPitchHook(hook);
     setPitchClosing(closing);
     setSuggestedDuration(duration);
 
+    // Ensure Gemini is connected before entering practice
+    if (!isConnected) await connect();
+
     onChangeView(AppView.PRACTICE);
-  }, [bullets, hook, closing, duration, setTalkingPoints, setPitchHook, setPitchClosing, setSuggestedDuration, onChangeView]);
+  }, [bullets, hook, closing, duration, setTalkingPoints, setPitchHook, setPitchClosing, setSuggestedDuration, onChangeView, connect, isConnected]);
 
   // --------------------------------------------------------------------------
   // RENDER

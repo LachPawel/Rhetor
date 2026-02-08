@@ -128,6 +128,8 @@ export const ViewReview: React.FC<ViewReviewProps> = ({ onReset, onPracticeAgain
         duration: Math.round(duration / 1000),
         wpm,
       });
+    } else if (!isConnected) {
+      modeSetRef.current = false;
     }
   }, [isConnected, metrics, setMode, duration, wpm]);
 

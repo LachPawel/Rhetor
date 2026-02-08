@@ -10,8 +10,16 @@ import { useRhetorContext } from '../lib/useRhetor';
 
 export function ConnectionStatusBar() {
   const { connectionStatus, reconnect } = useRhetorContext();
-  
+  const hasConnectedOnce = React.useRef(false);
+
+  // Track whether a connection has ever been attempted
+  if (connectionStatus === 'connecting' || connectionStatus === 'connected' || connectionStatus === 'reconnecting') {
+    hasConnectedOnce.current = true;
+  }
+
+  // Don't show the bar before the user has ever connected (initial 'disconnected' state)
   if (connectionStatus === 'connected') return null;
+  if (!hasConnectedOnce.current && connectionStatus === 'disconnected') return null;
 
   const statusConfig: Record<string, { icon: any, text: string, color: string }> = {
     disconnected: { icon: WifiOff, text: 'Disconnected', color: 'bg-stone-500' },

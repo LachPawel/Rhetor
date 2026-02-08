@@ -6,6 +6,12 @@
  * fuzzy matching (first-5-char prefix) and a sliding transcript window.
  */
 
+const DEBUG = true; // flip to false for production
+
+function dbg(...args: unknown[]): void {
+  if (DEBUG) console.log('[TeleprompterMatcher]', ...args);
+}
+
 // ── Stop words ────────────────────────────────────────────────────────
 const STOP_WORDS = new Set([
   "the",  "and",  "but",  "for",  "with", "that", "this", "from",
@@ -24,8 +30,8 @@ const STOP_WORDS = new Set([
 ]);
 
 const MIN_WORD_LENGTH = 3;
-const WINDOW_SIZE = 50;
-const MATCH_THRESHOLD = 0.5;
+const WINDOW_SIZE = 100;          // ← bigger window so terms survive longer
+const MATCH_THRESHOLD = 0.4;      // ← slightly more forgiving (was 0.5)
 const FUZZY_PREFIX_LENGTH = 5;
 const MIN_KEY_TERMS = 1;
 const MAX_KEY_TERMS = 4;
@@ -65,11 +71,16 @@ function extractKeyTerms(text: string): string[] {
  * Fuzzy match: two words match when they share the same first
  * `FUZZY_PREFIX_LENGTH` characters (handles inflections like
  * invest·ing ↔ invest·or, solution·s ↔ solution).
+ * For short words (< FUZZY_PREFIX_LENGTH), allow a 1-char edit distance.
  */
 function fuzzyMatch(a: string, b: string): boolean {
   if (a === b) return true;
   if (a.length < FUZZY_PREFIX_LENGTH || b.length < FUZZY_PREFIX_LENGTH) {
-    return a === b;
+    // For short words, allow match if one is a prefix of the other
+    // (e.g., "roi" matches "roi", "cost" matches "costs")
+    const shorter = a.length <= b.length ? a : b;
+    const longer  = a.length <= b.length ? b : a;
+    return longer.startsWith(shorter) && longer.length - shorter.length <= 1;
   }
   return a.slice(0, FUZZY_PREFIX_LENGTH) === b.slice(0, FUZZY_PREFIX_LENGTH);
 }
@@ -103,6 +114,7 @@ export function createTeleprompterMatcher(): TeleprompterMatcher {
   function advance(): void {
     if (currentIndex >= bulletKeyTerms.length - 1) return; // already at last bullet
     currentIndex++;
+    dbg(`ADVANCE → bullet #${currentIndex}`);
     for (const cb of listeners) {
       try {
         cb(currentIndex);
@@ -112,21 +124,43 @@ export function createTeleprompterMatcher(): TeleprompterMatcher {
     }
   }
 
+  /**
+   * Evaluate the current bullet and possibly advance.
+   * Loops so that consecutive empty-term bullets and
+   * already-matched bullets are handled in one pass.
+   */
   function evaluate(): void {
-    if (bulletKeyTerms.length === 0) return;
-    if (currentIndex >= bulletKeyTerms.length) return;
+    // Loop to handle consecutive auto-skip / already-matched bullets
+    const maxIterations = bulletKeyTerms.length; // safety bound
+    for (let i = 0; i < maxIterations; i++) {
+      if (bulletKeyTerms.length === 0) return;
+      if (currentIndex >= bulletKeyTerms.length) return;
 
-    const terms = bulletKeyTerms[currentIndex];
-    if (terms.length === 0) {
-      // No extractable key terms — leave for manual advance
+      const terms = bulletKeyTerms[currentIndex];
+
+      // Auto-advance past bullets with no extractable key terms
+      if (terms.length === 0) {
+        dbg(`Bullet #${currentIndex} has 0 key terms — auto-skipping`);
+        advance();
+        continue;
+      }
+
+      const matched = terms.filter((t) => termInWindow(t, window)).length;
+      const ratio = matched / terms.length;
+
+      dbg(
+        `Bullet #${currentIndex}: ${matched}/${terms.length} terms matched (${(ratio * 100).toFixed(0)}%), ` +
+        `threshold=${(MATCH_THRESHOLD * 100).toFixed(0)}%, terms=${JSON.stringify(terms)}`
+      );
+
+      if (ratio >= MATCH_THRESHOLD) {
+        advance();
+        // Continue loop — the NEXT bullet might also be matched or have 0 terms
+        continue;
+      }
+
+      // Current bullet not yet matched — stop evaluating
       return;
-    }
-
-    const matched = terms.filter((t) => termInWindow(t, window)).length;
-    const ratio = matched / terms.length;
-
-    if (ratio >= MATCH_THRESHOLD) {
-      advance();
     }
   }
 
@@ -135,6 +169,7 @@ export function createTeleprompterMatcher(): TeleprompterMatcher {
       bulletKeyTerms = bullets.map(extractKeyTerms);
       currentIndex = 0;
       window = [];
+      dbg('setBullets:', bullets.map((b, i) => `#${i}: "${b}" → keys=${JSON.stringify(bulletKeyTerms[i])}`));
     },
 
     feedTranscript(text: string): void {
@@ -143,7 +178,10 @@ export function createTeleprompterMatcher(): TeleprompterMatcher {
         .map(normalize)
         .filter((w) => w.length > 0);
 
+      if (words.length === 0) return;
+
       window = [...window, ...words].slice(-WINDOW_SIZE);
+      dbg(`feedTranscript: +${words.length} words, window=${window.length}, text="${text.slice(0, 80)}…"`);
       evaluate();
     },
 

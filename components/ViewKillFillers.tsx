@@ -155,7 +155,7 @@ export const ViewKillFillers: React.FC<ViewKillFillersProps> = ({ onExit }) => {
     init();
   }, [isConnected, connect]);
 
-  // Set AI mode once connected
+  // Set AI mode once connected - reset on disconnect so it re-fires after reconnection
   useEffect(() => {
     if (isConnected && !modeSetRef.current) {
       modeSetRef.current = true;
@@ -174,6 +174,8 @@ export const ViewKillFillers: React.FC<ViewKillFillersProps> = ({ onExit }) => {
           duration: ROUND_DURATION,
         },
       });
+    } else if (!isConnected) {
+      modeSetRef.current = false;
     }
   }, [isConnected, setMode]);
 

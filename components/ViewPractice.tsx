@@ -1,14 +1,13 @@
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { ArrowLeft, Check, Eye, EyeOff } from 'lucide-react';
+import { ArrowLeft, Check, Eye, EyeOff, MessageSquare } from 'lucide-react';
 import { FadeTransition } from './FadeTransition.tsx';
-import { PitchOption, SessionResult, AgentMode } from '../types.ts';
+import { SessionResult, AgentMode } from '../types.ts';
 import { useRhetor } from '../contexts/RhetorContext.tsx';
 import { useRhetorStore } from '../stores/useRhetorStore.ts';
 import { createTeleprompterMatcher } from '../src/lib/teleprompter_matcher.ts';
 
 interface ViewPracticeProps {
-  pitchOption: PitchOption | null;
   onEnd: (result: SessionResult) => void;
 }
 
@@ -19,28 +18,30 @@ const getWpmColor = (wpm: number): string => {
   return 'text-red-500';
 };
 
-export const ViewPractice: React.FC<ViewPracticeProps> = ({ pitchOption, onEnd }) => {
-  const { setMode, isConnected, isSpeaking, talkingPoints, aiResponse, lastTranscript } = useRhetor();
+export const ViewPractice: React.FC<ViewPracticeProps> = ({ onEnd }) => {
+  const { setMode, isConnected, isSpeaking, talkingPoints, aiResponse, lastTranscript, resetTranscript } = useRhetor();
   const startSession = useRhetorStore((s) => s.startSession);
   const endSession = useRhetorStore((s) => s.endSession);
   const liveWpm = useRhetorStore((s) => s.currentMetrics?.wpm ?? 0);
   const fillerCount = useRhetorStore((s) => s.currentMetrics?.fillerCount ?? 0);
   const recentFillerWord = useRhetorStore((s) => s.recentFillerWord);
   const setNavigationBlocked = useRhetorStore((s) => s.setNavigationBlocked);
+  const suggestedDuration = useRhetorStore((s) => s.suggestedDuration);
   const [fillerFlash, setFillerFlash] = useState(false);
-  const duration = pitchOption?.durationSeconds || 120;
+  const duration = suggestedDuration > 0 ? suggestedDuration : 120;
   const [timeLeft, setTimeLeft] = useState(duration);
   const [stream, setStream] = useState<MediaStream | null>(null);
 
   // ── Start metrics session on mount, enable nav guard ─────────────
   useEffect(() => {
+    resetTranscript();   // Clear stale transcript from previous sessions
     startSession();
     setNavigationBlocked(true);
     return () => {
       endSession();
       setNavigationBlocked(false);
     };
-  }, [startSession, endSession, setNavigationBlocked]);
+  }, [resetTranscript, startSession, endSession, setNavigationBlocked]);
 
   // ── Teleprompter matcher (auto-advance) ──────────────────────────
   const matcherRef = useRef(createTeleprompterMatcher());
@@ -75,19 +76,26 @@ export const ViewPractice: React.FC<ViewPracticeProps> = ({ pitchOption, onEnd }
   // Teleprompter State
   const [prompterIndex, setPrompterIndex] = useState(0);
   const [showPrompter, setShowPrompter] = useState(true);
+  const [showTranscript, setShowTranscript] = useState(true);
+  const transcriptEndRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
 
   // Initialize matcher when talking points change
   useEffect(() => {
     if (talkingPoints.length > 0) {
-      matcherRef.current = createTeleprompterMatcher();
-      matcherRef.current.setBullets(talkingPoints);
+      const matcher = createTeleprompterMatcher();
+      matcherRef.current = matcher;
+      matcher.setBullets(talkingPoints);
       // Snap to current transcript length so we only match NEW speech, not old session text
-      prevTranscriptLenRef.current = lastTranscript?.length ?? 0;
+      const snapLen = lastTranscript?.length ?? 0;
+      prevTranscriptLenRef.current = snapLen;
       setPrompterIndex(0);
       setAllCovered(false);
 
-      matcherRef.current.onAdvance((newIndex: number) => {
+      console.log('[ViewPractice] Matcher initialized with', talkingPoints.length, 'bullets, transcript snap @', snapLen);
+
+      matcher.onAdvance((newIndex: number) => {
+        console.log('[ViewPractice] onAdvance →', newIndex);
         // Only advance if matcher is ahead of (or equal to) current manual position
         setPrompterIndex(prev => {
           const next = Math.max(prev, newIndex);
@@ -106,17 +114,20 @@ export const ViewPractice: React.FC<ViewPracticeProps> = ({ pitchOption, onEnd }
     const prev = prevTranscriptLenRef.current;
     if (lastTranscript.length > prev) {
       const delta = lastTranscript.slice(prev);
+      console.log('[ViewPractice] Feeding delta to matcher:', delta.length, 'chars →', JSON.stringify(delta.slice(0, 120)));
       matcherRef.current.feedTranscript(delta);
       prevTranscriptLenRef.current = lastTranscript.length;
     }
   }, [lastTranscript]);
 
-  // Set mode once when connected
+  // Set mode when connected — reset on disconnect so it re-fires after reconnection
   const modeSetRef = useRef(false);
   useEffect(() => {
     if (isConnected && !modeSetRef.current) {
       modeSetRef.current = true;
       setMode(AgentMode.COACH_PRACTICE, { talkingPoints });
+    } else if (!isConnected) {
+      modeSetRef.current = false;
     }
   }, [isConnected, setMode, talkingPoints]);
   
@@ -195,6 +206,11 @@ export const ViewPractice: React.FC<ViewPracticeProps> = ({ pitchOption, onEnd }
           }
       }
   };
+
+  // Auto-scroll transcript to bottom as new words arrive
+  useEffect(() => {
+    transcriptEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [lastTranscript]);
 
   return (
     <FadeTransition className="flex flex-col min-h-screen p-6 relative bg-stone-50 text-stone-900">
@@ -284,13 +300,40 @@ export const ViewPractice: React.FC<ViewPracticeProps> = ({ pitchOption, onEnd }
         )}
       </div>
 
+      {/* ── LIVE TRANSCRIPT PANEL ──────────────────────────────────── */}
+      {showTranscript && (
+        <div className="w-full max-w-4xl mx-auto mt-4 z-10">
+          <div className="bg-white/80 backdrop-blur border border-stone-200 rounded-lg shadow-sm overflow-hidden">
+            <div className="px-4 py-2 border-b border-stone-100 flex items-center justify-between">
+              <span className="text-xs font-mono text-stone-400 uppercase tracking-widest">
+                Live Transcript
+              </span>
+              <span className={`text-xs font-mono ${isConnected ? 'text-emerald-500' : 'text-red-400'}`}>
+                {isConnected ? '● Connected' : '○ Connecting…'}
+              </span>
+            </div>
+            <div className="px-4 py-3 max-h-32 overflow-y-auto text-sm text-stone-700 leading-relaxed">
+              {lastTranscript ? (
+                <p>{lastTranscript}</p>
+              ) : (
+                <p className="text-stone-300 italic">Start speaking — your words will appear here…</p>
+              )}
+              <div ref={transcriptEndRef} />
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="mt-8 flex justify-between items-center z-10 w-full max-w-4xl mx-auto">
         <div className="flex items-center gap-6">
             {talkingPoints.length > 0 && (
-                <button onClick={() => setShowPrompter(!showPrompter)} className="text-stone-400 hover:text-stone-900 transition-colors">
+                <button onClick={() => setShowPrompter(!showPrompter)} className="text-stone-400 hover:text-stone-900 transition-colors" title="Toggle prompter">
                     {showPrompter ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
                 </button>
             )}
+            <button onClick={() => setShowTranscript(!showTranscript)} className={`transition-colors ${showTranscript ? 'text-stone-900' : 'text-stone-400 hover:text-stone-900'}`} title="Toggle transcript">
+                <MessageSquare className="w-4 h-4" />
+            </button>
         </div>
         <button onClick={finishSession} className="text-stone-900 hover:text-red-600 tracking-widest uppercase text-xs border-b border-stone-200 hover:border-red-600 pb-1 transition-all">End Session</button>
       </div>
