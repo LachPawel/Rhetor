@@ -20,7 +20,7 @@ export const ViewLanding: React.FC<ViewLandingProps> = ({ onChangeView }) => {
             >
                 <h1 className="text-6xl md:text-8xl font-serif tracking-tight mb-2">Rhetor</h1>
                 <p className="text-sm md:text-base uppercase tracking-[0.2em] text-stone-500 font-medium">
-                    The Art of Persuasion
+                    The art of speaking well.
                 </p>
             </motion.div>
 
@@ -39,7 +39,7 @@ export const ViewLanding: React.FC<ViewLandingProps> = ({ onChangeView }) => {
                 className="group relative px-12 py-4 overflow-hidden rounded-full transition-all hover:shadow-lg"
             >
                <span className="relative z-10 font-serif text-lg italic text-stone-900 group-hover:text-white transition-colors duration-500">
-                    Enter
+                    Enter Academy
                </span>
                <div className="absolute inset-0 border border-stone-300 rounded-full group-hover:border-stone-900 transition-colors duration-300" />
                <div className="absolute inset-0 bg-stone-900 scale-x-0 group-hover:scale-x-100 transition-transform duration-500 origin-left" />
