@@ -12,7 +12,6 @@ interface ViewHomeProps {
 
 export const ViewHome: React.FC<ViewHomeProps> = ({ onChangeView }) => {
   const { connect, isConnected, isConnecting, setMode, user } = useRhetor();
-  const sessionHistory = useRhetorStore((s) => s.sessionHistory);
 
   useEffect(() => {
     if (isConnected) {
@@ -35,7 +34,7 @@ export const ViewHome: React.FC<ViewHomeProps> = ({ onChangeView }) => {
   return (
     <FadeTransition className="flex flex-col min-h-screen pb-20 bg-stone-50 text-stone-900">
       
-      <div className="px-6 pt-10 flex-1 flex flex-col gap-6">
+      <div className="px-6 flex-1 flex flex-col justify-center gap-8">
         
         {/* Today's Challenge */}
         <div className="bg-stone-100 border border-stone-200 p-4 rounded-lg flex items-center justify-between cursor-pointer hover:bg-stone-200 transition-colors" onClick={handleWarmUp}>
@@ -91,34 +90,6 @@ export const ViewHome: React.FC<ViewHomeProps> = ({ onChangeView }) => {
                 </div>
             </button>
         </div>
-
-        {/* Recent Sessions */}
-        {sessionHistory && sessionHistory.length > 0 && (
-            <div className="mt-2">
-                <div className="flex justify-between items-end mb-4">
-                    <h3 className="text-lg serif text-stone-900">Recent Sessions</h3>
-                    <button onClick={() => onChangeView(AppView.PROFILE)} className="text-xs uppercase tracking-widest text-stone-400">View All</button>
-                </div>
-                
-                <div className="flex flex-col gap-3">
-                    {sessionHistory.slice(-2).reverse().map(session => (
-                        <div key={session.id} className="bg-white border border-stone-200 p-4 rounded-lg flex items-center justify-between">
-                            <div>
-                                <h4 className="text-sm font-bold text-stone-900 truncate max-w-[150px]">{session.topic || 'Freestyle Session'}</h4>
-                                <div className="flex items-center gap-2 mt-1">
-                                    <span className="text-xs text-stone-500">Score: {session.score}</span>
-                                    <span className="text-stone-300">•</span>
-                                    <span className="text-xs text-stone-500 font-mono">{Math.floor(session.duration/60)}:{String(session.duration%60).padStart(2,'0')}</span>
-                                </div>
-                            </div>
-                            <div className="w-8 h-8 rounded-full bg-stone-50 flex items-center justify-center">
-                                <Play className="w-3 h-3 text-stone-400 ml-0.5" />
-                            </div>
-                        </div>
-                    ))}
-                </div>
-            </div>
-        )}
 
       </div>
     </FadeTransition>
