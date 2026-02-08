@@ -272,7 +272,16 @@ export class ToolHandler {
 
   private handleAwardDrachmas(args: AwardDrachmasArgs): ToolCallResult {
     const { amount, reason, showAnimation = true } = args;
-    
+    const currentMode = this.store.getState().currentMode;
+
+    // During warm-up the app handles its own reward screen — suppress AI-triggered awards
+    if (currentMode === 'coach_warmup') {
+      return {
+        success: true,
+        result: 'Warm-up rewards are handled by the app automatically. Do not award drachmas during warm-up.',
+      };
+    }
+
     this.store.getState().awardDrachmas(amount, reason);
 
     if (showAnimation) {
@@ -411,7 +420,16 @@ export class ToolHandler {
 
   private handleShowCelebration(args: ShowCelebrationArgs): ToolCallResult {
     const { celebrationType, message } = args;
-    
+    const currentMode = this.store.getState().currentMode;
+
+    // During warm-up the app handles its own completion UI — block AI celebrations
+    if (currentMode === 'coach_warmup') {
+      return {
+        success: true,
+        result: 'Celebrations during warm-up are handled by the app. Do not trigger celebrations.',
+      };
+    }
+
     this.store.getState().triggerCelebration(celebrationType);
 
     // Play appropriate sound

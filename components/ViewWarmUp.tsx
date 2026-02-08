@@ -5,6 +5,7 @@ import { FadeTransition } from './FadeTransition.tsx';
 import { X, Wind, Pause, ArrowDown, ChevronRight, Music, Waves, Type, SkipForward, Hand, Crown, Footprints, Sparkles, Coins } from 'lucide-react';
 import { useRhetor } from '../contexts/RhetorContext.tsx';
 import { AgentMode } from '../types.ts';
+import { PitchDetector, type PitchFrame } from '../lib/pitch_detector.ts';
 
 type BreathPhase = 'idle' | 'inhale' | 'hold' | 'exhale' | 'hold-empty';
 
@@ -120,6 +121,84 @@ const BODY_EXERCISES: BodyExercise[] = [
 const TOTAL_BODY_DURATION = BODY_EXERCISES.reduce((s, e) => s + e.totalDuration, 0);
 const DRACHMA_REWARD = 15;
 
+// ── Pitch visualisation constants ─────────────────────────────────────────
+const PITCH_HISTORY_LENGTH = 120; // ~2 seconds at 60fps
+const PITCH_MIN_HZ = 70;
+const PITCH_MAX_HZ = 500;
+const PITCH_LINE_HEIGHT = 120; // px height of the SVG canvas
+
+/** Small inline component: renders a scrolling pitch line from history */
+const PitchLine: React.FC<{ history: PitchFrame[] }> = ({ history }) => {
+  const width = 280;
+  const h = PITCH_LINE_HEIGHT;
+  const pad = 4;
+
+  // Convert history to SVG polyline points
+  const points = history
+    .map((f, i) => {
+      if (f.frequency === 0 || f.confidence < 0.6) return null;
+      const x = (i / (PITCH_HISTORY_LENGTH - 1)) * width;
+      const normHz = Math.log2(f.frequency / PITCH_MIN_HZ) / Math.log2(PITCH_MAX_HZ / PITCH_MIN_HZ);
+      const y = h - pad - Math.max(0, Math.min(1, normHz)) * (h - pad * 2);
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    })
+    .filter(Boolean);
+
+  // Current frequency label
+  const last = history.length > 0 ? history[history.length - 1] : null;
+  const hzLabel = last && last.frequency > 0 && last.confidence >= 0.6
+    ? `${Math.round(last.frequency)} Hz`
+    : '—';
+
+  return (
+    <div className="flex flex-col items-center mb-4">
+      <svg
+        width={width}
+        height={h}
+        className="overflow-visible"
+        style={{ background: 'rgba(0,0,0,0.03)', borderRadius: 12 }}
+      >
+        {/* Horizontal guide lines */}
+        {[0.25, 0.5, 0.75].map((frac) => (
+          <line
+            key={frac}
+            x1={0}
+            y1={pad + frac * (h - pad * 2)}
+            x2={width}
+            y2={pad + frac * (h - pad * 2)}
+            stroke="rgba(0,0,0,0.06)"
+            strokeDasharray="4 4"
+          />
+        ))}
+        {/* Pitch polyline */}
+        {points.length > 1 && (
+          <polyline
+            points={points.join(' ')}
+            fill="none"
+            stroke="#1c1917"
+            strokeWidth={2.5}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        )}
+        {/* Current dot */}
+        {points.length > 0 && (() => {
+          const lastPt = points[points.length - 1]!;
+          const [cx, cy] = lastPt.split(',').map(Number);
+          return (
+            <circle cx={cx} cy={cy} r={4} fill="#1c1917">
+              <animate attributeName="r" values="4;6;4" dur="1s" repeatCount="indefinite" />
+            </circle>
+          );
+        })()}
+      </svg>
+      <span className="text-xs text-stone-400 mt-1.5 font-mono tabular-nums">
+        {hzLabel}
+      </span>
+    </div>
+  );
+};
+
 // ── Helper function for breath phase message ──────────────────────────────
 const getBreathPhaseMessage = (phase: BreathPhase): string => {
   switch (phase) {
@@ -195,6 +274,10 @@ export const ViewWarmUp: React.FC<ViewWarmUpProps> = ({ onComplete, onExit }) =>
   const [showReward, setShowReward] = useState(false);
   const bodyAutoRef = useRef(false);
 
+  // ── Pitch tracking state (for humming visualisation) ──────────────────
+  const pitchDetectorRef = useRef<PitchDetector | null>(null);
+  const [pitchHistory, setPitchHistory] = useState<PitchFrame[]>([]);
+
   // Set mode when connected - reset on disconnect so it re-fires after reconnection
   const modeSetRef = useRef(false);
   useEffect(() => {
@@ -205,6 +288,40 @@ export const ViewWarmUp: React.FC<ViewWarmUpProps> = ({ onComplete, onExit }) =>
       modeSetRef.current = false;
     }
   }, [isConnected, setMode]);
+
+  // ── Pitch detector lifecycle (humming & lip-trills exercises) ───────────
+  const isPitchExerciseActive = currentStage.id === 'voice' && voiceRunning &&
+    (VOICE_EXERCISES[voiceExIndex]?.id === 'humming' || VOICE_EXERCISES[voiceExIndex]?.id === 'lip-trills');
+
+  useEffect(() => {
+    if (!isPitchExerciseActive) {
+      // Stop & clean up
+      if (pitchDetectorRef.current) {
+        pitchDetectorRef.current.stop();
+        pitchDetectorRef.current = null;
+      }
+      setPitchHistory([]);
+      return;
+    }
+
+    const pd = new PitchDetector();
+    pitchDetectorRef.current = pd;
+
+    pd.onPitch = (frame: PitchFrame) => {
+      setPitchHistory(prev => {
+        const next = [...prev, frame];
+        if (next.length > PITCH_HISTORY_LENGTH) next.shift();
+        return next;
+      });
+    };
+
+    pd.start().catch(console.error);
+
+    return () => {
+      pd.stop();
+      if (pitchDetectorRef.current === pd) pitchDetectorRef.current = null;
+    };
+  }, [isPitchExerciseActive]);
 
   // ── Simple timer-based breathing cycle ────────────────────────────────────
   useEffect(() => {
@@ -657,28 +774,34 @@ export const ViewWarmUp: React.FC<ViewWarmUpProps> = ({ onComplete, onExit }) =>
                             </p>
 
                             {/* ── Per-exercise content ── */}
-                            {/* Humming */}
+                            {/* Humming — pitch visualisation */}
                             {ex.id === 'humming' && voiceRunning && (
-                              <motion.div
-                                key={`cue-${voiceCueIdx}`}
-                                initial={{ opacity: 0, scale: 0.95 }}
-                                animate={{ opacity: 1, scale: 1 }}
-                                className="text-2xl font-light text-stone-700 mb-6"
-                              >
-                                {HUMMING_CUES[voiceCueIdx % HUMMING_CUES.length]}
-                              </motion.div>
+                              <div className="flex flex-col items-center">
+                                <motion.div
+                                  key={`cue-${voiceCueIdx}`}
+                                  initial={{ opacity: 0, scale: 0.95 }}
+                                  animate={{ opacity: 1, scale: 1 }}
+                                  className="text-2xl font-light text-stone-700 mb-4"
+                                >
+                                  {HUMMING_CUES[voiceCueIdx % HUMMING_CUES.length]}
+                                </motion.div>
+                                <PitchLine history={pitchHistory} />
+                              </div>
                             )}
 
-                            {/* Lip Trills */}
+                            {/* Lip Trills — pitch visualisation */}
                             {ex.id === 'lip-trills' && voiceRunning && (
-                              <motion.div
-                                key={`cue-${voiceCueIdx}`}
-                                initial={{ opacity: 0, scale: 0.95 }}
-                                animate={{ opacity: 1, scale: 1 }}
-                                className="text-2xl font-light text-stone-700 mb-6"
-                              >
-                                {LIP_TRILL_CUES[voiceCueIdx % LIP_TRILL_CUES.length]}
-                              </motion.div>
+                              <div className="flex flex-col items-center">
+                                <motion.div
+                                  key={`cue-${voiceCueIdx}`}
+                                  initial={{ opacity: 0, scale: 0.95 }}
+                                  animate={{ opacity: 1, scale: 1 }}
+                                  className="text-2xl font-light text-stone-700 mb-4"
+                                >
+                                  {LIP_TRILL_CUES[voiceCueIdx % LIP_TRILL_CUES.length]}
+                                </motion.div>
+                                <PitchLine history={pitchHistory} />
+                              </div>
                             )}
 
                             {/* Tongue Twisters */}
