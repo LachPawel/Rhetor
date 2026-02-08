@@ -10,6 +10,7 @@ export enum AppView {
   WARMUP = 'WARMUP',
   PREP = 'PREP', // Pitch Builder
   PRACTICE = 'PRACTICE',
+  SIMULATION = 'SIMULATION', // New audience simulation
   REVIEW = 'REVIEW',
   LESSON = 'LESSON',
 }
@@ -20,6 +21,7 @@ export enum AgentMode {
   COACH_WARMUP = 'COACH_WARMUP',
   INTERVIEWER = 'INTERVIEWER',
   COACH_PRACTICE = 'COACH_PRACTICE',
+  SIMULATION = 'SIMULATION', // New audience simulation mode
   ANALYST = 'ANALYST',
   COACH_LESSON = 'COACH_LESSON'
 }

@@ -10,6 +10,7 @@ import { ViewLesson } from './components/ViewLesson.tsx';
 import { ViewWarmUp } from './components/ViewWarmUp.tsx';
 import { ViewPrep } from './components/ViewPrep.tsx';
 import { ViewPractice } from './components/ViewPractice.tsx';
+import { ViewSimulation } from './components/ViewSimulation.tsx';
 import { ViewReview } from './components/ViewReview.tsx';
 import { ViewLanding } from './components/ViewLanding.tsx';
 import { BottomNav } from './components/BottomNav.tsx';
@@ -56,6 +57,7 @@ const AppContent: React.FC = () => {
       AppView.WARMUP, 
       AppView.PREP, 
       AppView.PRACTICE, 
+      AppView.SIMULATION,
       AppView.REVIEW, 
       AppView.LESSON
   ].includes(currentView);
@@ -107,6 +109,10 @@ const AppContent: React.FC = () => {
             
             {currentView === AppView.PRACTICE && (
                 <ViewPractice key="practice" pitchOption={selectedPitch} onEnd={handlePracticeEnd} />
+            )}
+
+            {currentView === AppView.SIMULATION && (
+                <ViewSimulation key="simulation" onBack={() => setCurrentView(AppView.HOME)} />
             )}
             
             {currentView === AppView.REVIEW && (

@@ -3,7 +3,7 @@ import React, { useEffect } from 'react';
 import { FadeTransition } from './FadeTransition.tsx';
 import { AppView, AgentMode } from '../types.ts';
 import { useRhetor } from '../contexts/RhetorContext.tsx';
-import { Mic, Sparkles, Flame, Coins, Zap, Wind, FileText, BookOpen, Target, Play } from 'lucide-react';
+import { Mic, Sparkles, Flame, Coins, Zap, Wind, FileText, BookOpen, Target, Play, Users } from 'lucide-react';
 import { useRhetorStore } from '../stores/useRhetorStore';
 
 interface ViewHomeProps {
@@ -29,6 +29,12 @@ export const ViewHome: React.FC<ViewHomeProps> = ({ onChangeView }) => {
   const handlePractice = async () => {
     if (!isConnected) await connect();
     onChangeView(AppView.PRACTICE);
+  };
+
+  // Connect before simulation
+  const handleSimulation = async () => {
+    if (!isConnected) await connect();
+    onChangeView(AppView.SIMULATION);
   };
 
   return (
@@ -80,13 +86,13 @@ export const ViewHome: React.FC<ViewHomeProps> = ({ onChangeView }) => {
                 </div>
             </button>
 
-            <button onClick={() => onChangeView(AppView.AGORA)} className="p-4 bg-white border border-stone-200 rounded-lg shadow-sm hover:border-stone-400 transition-all text-left flex flex-col justify-between h-32">
+            <button onClick={handleSimulation} className="p-4 bg-white border border-stone-200 rounded-lg shadow-sm hover:border-stone-400 transition-all text-left flex flex-col justify-between h-32">
                 <div className="w-8 h-8 rounded-full bg-stone-100 flex items-center justify-center">
-                    <BookOpen className="w-4 h-4 text-stone-600" />
+                    <Users className="w-4 h-4 text-stone-600" />
                 </div>
                 <div>
-                    <h4 className="font-serif text-lg leading-none mb-1">Academy</h4>
-                    <p className="text-xs text-stone-500">Learn skills</p>
+                    <h4 className="font-serif text-lg leading-none mb-1">Simulation</h4>
+                    <p className="text-xs text-stone-500">Face the audience</p>
                 </div>
             </button>
         </div>

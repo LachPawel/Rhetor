@@ -21,6 +21,7 @@ const MODE_MAP: Record<string, AIMode> = {
   [AgentMode.COACH_WARMUP]: 'coach_warmup',
   [AgentMode.COACH_LESSON]: 'coach_lesson',
   [AgentMode.COACH_PRACTICE]: 'coach_practice',
+  [AgentMode.SIMULATION]: 'simulation',
   [AgentMode.INTERVIEWER]: 'interviewer',
   [AgentMode.ANALYST]: 'analyst',
   [AgentMode.CONTENT_BUILDER]: 'content_builder',
