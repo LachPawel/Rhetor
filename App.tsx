@@ -11,6 +11,7 @@ import { ViewWarmUp } from './components/ViewWarmUp.tsx';
 import { ViewPrep } from './components/ViewPrep.tsx';
 import { ViewPractice } from './components/ViewPractice.tsx';
 import { ViewReview } from './components/ViewReview.tsx';
+import { ViewLanding } from './components/ViewLanding.tsx';
 import { BottomNav } from './components/BottomNav.tsx';
 import { AlertTriangle } from 'lucide-react';
 import { RhetorProvider } from './contexts/RhetorContext.tsx';
@@ -37,15 +38,16 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
 }
 
 const AppContent: React.FC = () => {
-  const [currentView, setCurrentView] = useState<AppView>(AppView.HOME);
+  const [currentView, setCurrentView] = useState<AppView>(AppView.LANDING);
   const [activeLesson, setActiveLesson] = useState<Lesson | null>(null);
   const [selectedPitch, setSelectedPitch] = useState<PitchOption | null>(null);
   const [sessionResult, setSessionResult] = useState<SessionResult | null>(null);
 
   // Full screen modes hide the bottom nav
   const isFullScreen = [
+      AppView.LANDING,
       AppView.WARMUP, 
-      AppView.PREP, 
+      AppView.PREP,  
       AppView.PRACTICE, 
       AppView.REVIEW, 
       AppView.LESSON
@@ -72,6 +74,7 @@ const AppContent: React.FC = () => {
 
         <AnimatePresence mode="wait">
             {/* Tab Views */}
+            {currentView === AppView.LANDING && <ViewLanding key="landing" onChangeView={setCurrentView} />}
             {currentView === AppView.HOME && <ViewHome key="home" onChangeView={setCurrentView} />}
             {currentView === AppView.AGORA && <ViewAgora key="agora" onSelectLesson={handleLessonSelect} />}
             {currentView === AppView.SYMPOSIUM && <ViewSymposium key="symposium" />}
