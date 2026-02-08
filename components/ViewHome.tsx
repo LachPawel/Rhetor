@@ -40,9 +40,9 @@ export const ViewHome: React.FC<ViewHomeProps> = ({ onChangeView, onStartLesson 
     });
   }, [user.completedLessons]);
 
-  // ── Last 3 practice sessions (newest first) ───────────────────────
+  // ── Last 2 practice sessions (newest first) ────────────────────
   const recentSessions = useMemo(
-    () => (sessionHistory ?? []).slice(-3).reverse(),
+    () => (sessionHistory ?? []).slice(-2).reverse(),
     [sessionHistory],
   );
 
@@ -159,9 +159,9 @@ export const ViewHome: React.FC<ViewHomeProps> = ({ onChangeView, onStartLesson 
               Recent Sessions
             </h3>
             <div className="flex flex-col gap-2">
-              {recentSessions.map((session, i) => (
+              {recentSessions.map((session) => (
                 <div
-                  key={session.timestamp ?? i}
+                  key={session.id}
                   className="bg-white border border-stone-200 rounded-lg p-3 flex items-center justify-between"
                 >
                   <div className="flex-1 min-w-0">
@@ -169,11 +169,12 @@ export const ViewHome: React.FC<ViewHomeProps> = ({ onChangeView, onStartLesson 
                       {session.topic || 'Freestyle'}
                     </p>
                     <p className="text-[11px] text-stone-400 mt-0.5">
-                      {new Date(session.timestamp).toLocaleDateString(
+                      {new Date(session.date).toLocaleDateString(
                         undefined,
                         { month: 'short', day: 'numeric' },
                       )}{' '}
-                      · {Math.round(session.durationSeconds / 60)}m
+                      · {Math.floor(session.duration / 60)}m
+                      {session.wpm > 0 ? ` · ${session.wpm} wpm` : ''}
                     </p>
                   </div>
                   {session.score != null && (

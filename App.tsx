@@ -295,7 +295,6 @@ function AppContent() {
   const storeView = useRhetorStore(s => s.currentView);
   const navigate = useRhetorStore(s => s.navigate);
   const clearSession = useRhetorStore(s => s.clearSession);
-  const addSessionToHistory = useRhetorStore(s => s.addSessionToHistory);
 
   // Sync store view with local view
   useEffect(() => {
@@ -418,17 +417,10 @@ function AppContent() {
 
   const handlePracticeEnd = useCallback((result: SessionResult) => {
     setSessionResult(result);
-    // Save to session history
-    const topic = useRhetorStore.getState().pitchTopic || 'Freestyle';
-    addSessionToHistory({
-      timestamp: Date.now(),
-      topic,
-      durationSeconds: result.durationSeconds,
-      score: Math.max(0, Math.min(100, Math.round(100 - result.fillersCount * 5))),
-    });
     handleViewChange(AppView.REVIEW);
     // Note: ViewReview handles setMode(ANALYST) with context data
-  }, [handleViewChange, addSessionToHistory]);
+    // SessionRecord is saved from ViewReview where full metrics are available
+  }, [handleViewChange]);
 
   const handleWarmupComplete = useCallback(() => {
     setWarmupJustCompleted(true);

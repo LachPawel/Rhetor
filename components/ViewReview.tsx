@@ -5,6 +5,7 @@ import { AgentMode } from '../types.ts';
 import { Home, RotateCcw, Check, X } from 'lucide-react';
 import { useRhetor } from '../contexts/RhetorContext.tsx';
 import { useRhetorStore } from '../stores/useRhetorStore.ts';
+import type { SessionRecord } from '../stores/useRhetorStore.ts';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -84,6 +85,36 @@ export const ViewReview: React.FC<ViewReviewProps> = ({ onReset, onPracticeAgain
     [talkingPoints, transcriptTokens],
   );
   const coveredCount = pointsCoverage.filter((p) => p.covered).length;
+
+  // ---- Save session record to history (once) ----------------------------
+  const addSessionToHistory = useRhetorStore((s) => s.addSessionToHistory);
+  const pitchTopic = useRhetorStore((s) => s.pitchTopic);
+  const savedRef = useRef(false);
+
+  useEffect(() => {
+    if (savedRef.current || !metrics) return;
+    savedRef.current = true;
+
+    const dur = (metrics.endTime ?? Date.now()) - metrics.startTime;
+    const score = Math.max(
+      0,
+      Math.min(100, Math.round(100 - fillerCount * 5)),
+    );
+
+    const record: SessionRecord = {
+      id: crypto.randomUUID(),
+      date: new Date().toISOString(),
+      topic: pitchTopic || 'Freestyle',
+      duration: Math.round(dur / 1000),
+      wpm,
+      fillerCount,
+      score,
+      bulletsTotal: talkingPoints.length,
+      bulletsCovered: coveredCount,
+    };
+
+    addSessionToHistory(record);
+  }, [metrics]); // intentionally minimal deps — runs once
 
   // ---- Coach debrief via Analyst mode --------------------------------------
   const [debriefText, setDebriefText] = useState<string | null>(null);

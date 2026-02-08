@@ -49,11 +49,16 @@ export interface DrillProgress {
   bestScore?: number;
 }
 
-export interface PracticeSessionRecord {
-  timestamp: number;
+export interface SessionRecord {
+  id: string;
+  date: string; // ISO
   topic: string;
-  durationSeconds: number;
-  score?: number;
+  duration: number; // seconds
+  wpm: number;
+  fillerCount: number;
+  score: number;
+  bulletsTotal: number;
+  bulletsCovered: number;
 }
 
 export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'reconnecting' | 'error' | 'closed';
@@ -114,7 +119,7 @@ interface SessionSlice {
   transcript: string;
   lastFillerTimestamp: number | null;
   recentFillerWord: string | null;
-  sessionHistory: PracticeSessionRecord[];
+  sessionHistory: SessionRecord[];
   
   // Actions
   startSession: () => void;
@@ -123,7 +128,7 @@ interface SessionSlice {
   addFillerEvent: (word: string, position: number) => void;
   updateMetrics: (partial: Partial<SessionMetrics>) => void;
   clearSession: () => void;
-  addSessionToHistory: (record: PracticeSessionRecord) => void;
+  addSessionToHistory: (record: SessionRecord) => void;
 }
 
 interface AISlice {
@@ -548,7 +553,7 @@ export const useRhetorStore = create<RhetorStore>()(
 
       sessionHistory: [],
 
-      addSessionToHistory: (record: PracticeSessionRecord) => {
+      addSessionToHistory: (record: SessionRecord) => {
         set((state) => {
           state.sessionHistory.push(record);
           // Keep only last 20 sessions
