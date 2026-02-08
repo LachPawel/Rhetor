@@ -78,6 +78,7 @@ export interface RhetorContextType {
   isConnected: boolean;
   isConnecting: boolean;
   isSpeaking: boolean;
+  volume: number;
   connect: () => Promise<void>;
   disconnect: () => void;
   setMode: (mode: AgentMode, contextData?: any) => void;

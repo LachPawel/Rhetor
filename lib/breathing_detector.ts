@@ -86,6 +86,53 @@ export class BreathingDetector {
   }
 
   /**
+   * Start in external-feed mode (no AnalyserNode or sampling interval).
+   * Volume must be fed manually via feedVolume().
+   */
+  startExternal(): void {
+    this.reset();
+    // No sampling interval — caller will push volume via feedVolume()
+  }
+
+  /**
+   * Feed an externally-measured volume value (0-1).
+   * Use this when the mic's VU meter already provides volume data
+   * so we don't need a duplicate AnalyserNode.
+   */
+  feedVolume(volume: number): void {
+    this.volumeHistory.push(volume);
+    if (this.volumeHistory.length > this.historyLength) {
+      this.volumeHistory.shift();
+    }
+
+    const detectedPhase = this.detectPhase(volume);
+
+    if (detectedPhase !== this.currentPhase) {
+      const now = Date.now();
+      const duration = now - this.phaseStartTime;
+
+      if (this.currentPhase !== 'idle') {
+        this.events.push({
+          phase: this.currentPhase,
+          timestamp: this.phaseStartTime,
+          volume,
+          duration,
+        });
+      }
+
+      // Check for cycle completion (exhale -> inhale transition)
+      if (this.currentPhase === 'exhale' && detectedPhase === 'inhale') {
+        this.cycleCount++;
+        this.options.onCycleComplete?.(this.cycleCount, this.calculateMetrics());
+      }
+
+      this.currentPhase = detectedPhase;
+      this.phaseStartTime = now;
+      this.options.onPhaseChange?.(detectedPhase, volume);
+    }
+  }
+
+  /**
    * Stop detection
    */
   stop(): BreathingMetrics {

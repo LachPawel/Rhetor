@@ -38,6 +38,7 @@ export const useRhetor = (): RhetorContextType => {
     isConnected: ctx.isConnected,
     isConnecting: ctx.connectionStatus === 'connecting',
     isSpeaking: ctx.isSpeaking,
+    volume: ctx.volume,
     connect: ctx.connect as unknown as () => Promise<void>,
     disconnect: ctx.disconnect,
 
