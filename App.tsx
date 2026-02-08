@@ -344,6 +344,19 @@ function AppContent() {
     });
   }, [handleViewChange, rhetor]);
 
+  const handleNextLesson = useCallback((lesson: Lesson) => {
+    setActiveLesson(lesson);
+    rhetor.setMode('coach_lesson', {
+      lesson: {
+        id: lesson.id,
+        title: lesson.title,
+        description: lesson.description,
+        pillar: lesson.pillarId,
+      },
+      stepNumber: 0,
+    });
+  }, [rhetor]);
+
   const handleLessonExit = useCallback(() => {
     setActiveLesson(null);
     handleViewChange(AppView.AGORA);
@@ -433,6 +446,7 @@ function AppContent() {
             key="lesson"
             lesson={activeLesson}
             onExit={handleLessonExit}
+            onNextLesson={handleNextLesson}
           />
         )}
 
