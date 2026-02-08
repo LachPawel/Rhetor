@@ -78,7 +78,6 @@ export const ViewHome: React.FC<ViewHomeProps> = ({ onChangeView, onStartLesson 
               onClick={() => onChangeView(AppView.WARMUP)}
               className="p-4 bg-white border border-stone-200 rounded-lg shadow-sm hover:border-stone-400 transition-all text-left"
             >
-              <span className="text-2xl mb-2 block">🫁</span>
               <h4 className="font-serif text-base font-semibold">Warm Up</h4>
               <p className="text-[11px] text-stone-400 mt-0.5">
                 Breathing &amp; voice prep
@@ -89,7 +88,6 @@ export const ViewHome: React.FC<ViewHomeProps> = ({ onChangeView, onStartLesson 
               onClick={() => onChangeView(AppView.INPUT)}
               className="p-4 bg-white border border-stone-200 rounded-lg shadow-sm hover:border-stone-400 transition-all text-left"
             >
-              <span className="text-2xl mb-2 block">📝</span>
               <h4 className="font-serif text-base font-semibold">Prepare</h4>
               <p className="text-[11px] text-stone-400 mt-0.5">
                 Build your content
@@ -100,7 +98,6 @@ export const ViewHome: React.FC<ViewHomeProps> = ({ onChangeView, onStartLesson 
               onClick={handlePracticeClick}
               className="p-4 bg-white border border-stone-200 rounded-lg shadow-sm hover:border-stone-400 transition-all text-left"
             >
-              <span className="text-2xl mb-2 block">🎤</span>
               <h4 className="font-serif text-base font-semibold">Practice</h4>
               <p className="text-[11px] text-stone-400 mt-0.5">
                 {talkingPoints.length > 0 ? 'Continue session' : 'Start a session'}
@@ -111,7 +108,6 @@ export const ViewHome: React.FC<ViewHomeProps> = ({ onChangeView, onStartLesson 
               onClick={() => onChangeView(AppView.AGORA)}
               className="p-4 bg-white border border-stone-200 rounded-lg shadow-sm hover:border-stone-400 transition-all text-left"
             >
-              <span className="text-2xl mb-2 block">📚</span>
               <h4 className="font-serif text-base font-semibold">Academy</h4>
               <p className="text-[11px] text-stone-400 mt-0.5">
                 Lessons &amp; skills
@@ -211,13 +207,7 @@ export const ViewHome: React.FC<ViewHomeProps> = ({ onChangeView, onStartLesson 
               className="bg-white border border-stone-200 p-4 rounded-lg flex items-center gap-4 cursor-pointer hover:bg-stone-50 transition-colors"
               onClick={() => onStartLesson?.(nextLesson.id)}
             >
-              <div className="w-10 h-10 rounded-lg bg-stone-100 flex items-center justify-center text-lg">
-                {nextLesson.category === 'breathing'
-                  ? '🫁'
-                  : nextLesson.category === 'voice'
-                    ? '🗣️'
-                    : '🎯'}
-              </div>
+              <div className="w-10 h-10 rounded-lg bg-stone-100 flex items-center justify-center" />
               <div className="flex-1 min-w-0">
                 <h4 className="text-sm font-semibold text-stone-900">
                   {nextLesson.title}

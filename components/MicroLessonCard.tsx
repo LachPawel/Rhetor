@@ -5,7 +5,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { CheckCircle2, Circle, Star, Trophy, Zap, ChevronRight, Volume2 } from 'lucide-react';
+import { CheckCircle2, Circle, Star, Trophy, Zap, ChevronRight, Volume2, Mic } from 'lucide-react';
 
 // ============================================================================
 // TYPES
@@ -273,11 +273,11 @@ const TaskIcon: React.FC<{ type: TaskType }> = ({ type }) => {
   const iconClass = "w-4 h-4";
   switch (type) {
     case 'listen': return <Volume2 className={iconClass} />;
-    case 'repeat': return <span className="text-sm">🔁</span>;
-    case 'respond': return <span className="text-sm">💬</span>;
-    case 'choose': return <span className="text-sm">🎯</span>;
-    case 'record': return <span className="text-sm">🎤</span>;
-    case 'breathe': return <span className="text-sm">🌬️</span>;
+    case 'repeat': return <Circle className={iconClass} />;
+    case 'respond': return <Circle className={iconClass} />;
+    case 'choose': return <Circle className={iconClass} />;
+    case 'record': return <Mic className={iconClass} />;
+    case 'breathe': return <Circle className={iconClass} />;
     default: return <Circle className={iconClass} />;
   }
 };

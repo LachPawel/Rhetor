@@ -224,21 +224,21 @@ const INITIAL_METRICS: SessionMetrics = {
 // ============================================================================
 
 export const ACHIEVEMENTS: Achievement[] = [
-  { id: 'first_lesson', name: 'First Steps', description: 'Complete your first lesson', icon: '🏛️' },
-  { id: 'streak_3', name: 'Consistent Orator', description: 'Practice 3 days in a row', icon: '🔥' },
-  { id: 'streak_7', name: 'Week Warrior', description: 'Practice 7 days in a row', icon: '⚡' },
-  { id: 'streak_30', name: 'Monthly Master', description: 'Practice 30 days in a row', icon: '👑' },
-  { id: 'filler_free', name: 'Filler Free', description: 'Complete a drill with no fillers', icon: '✨' },
-  { id: 'perfect_score', name: 'Perfection', description: 'Score 100% on any drill', icon: '💎' },
-  { id: 'ethos_master', name: 'Ethos Master', description: 'Complete all Ethos lessons', icon: '🦅' },
-  { id: 'logos_master', name: 'Logos Master', description: 'Complete all Logos lessons', icon: '📐' },
-  { id: 'pathos_master', name: 'Pathos Master', description: 'Complete all Pathos lessons', icon: '❤️' },
-  { id: 'kairos_master', name: 'Kairos Master', description: 'Complete all Kairos lessons', icon: '⏰' },
-  { id: 'lexis_master', name: 'Lexis Master', description: 'Complete all Lexis lessons', icon: '📜' },
-  { id: 'drachmas_100', name: 'Bronze Collector', description: 'Earn 100 drachmas', icon: '🥉' },
-  { id: 'drachmas_500', name: 'Silver Collector', description: 'Earn 500 drachmas', icon: '🥈' },
-  { id: 'drachmas_1000', name: 'Gold Collector', description: 'Earn 1000 drachmas', icon: '🥇' },
-  { id: 'warmup_warrior', name: 'Warmup Warrior', description: 'Complete 10 warmup sessions', icon: '💪' },
+  { id: 'first_lesson', name: 'First Steps', description: 'Complete your first lesson', icon: '' },
+  { id: 'streak_3', name: 'Consistent Orator', description: 'Practice 3 days in a row', icon: '' },
+  { id: 'streak_7', name: 'Week Warrior', description: 'Practice 7 days in a row', icon: '' },
+  { id: 'streak_30', name: 'Monthly Master', description: 'Practice 30 days in a row', icon: '' },
+  { id: 'filler_free', name: 'Filler Free', description: 'Complete a drill with no fillers', icon: '' },
+  { id: 'perfect_score', name: 'Perfection', description: 'Score 100% on any drill', icon: '' },
+  { id: 'ethos_master', name: 'Ethos Master', description: 'Complete all Ethos lessons', icon: '' },
+  { id: 'logos_master', name: 'Logos Master', description: 'Complete all Logos lessons', icon: '' },
+  { id: 'pathos_master', name: 'Pathos Master', description: 'Complete all Pathos lessons', icon: '' },
+  { id: 'kairos_master', name: 'Kairos Master', description: 'Complete all Kairos lessons', icon: '' },
+  { id: 'lexis_master', name: 'Lexis Master', description: 'Complete all Lexis lessons', icon: '' },
+  { id: 'drachmas_100', name: 'Bronze Collector', description: 'Earn 100 drachmas', icon: '' },
+  { id: 'drachmas_500', name: 'Silver Collector', description: 'Earn 500 drachmas', icon: '' },
+  { id: 'drachmas_1000', name: 'Gold Collector', description: 'Earn 1000 drachmas', icon: '' },
+  { id: 'warmup_warrior', name: 'Warmup Warrior', description: 'Complete 10 warmup sessions', icon: '' },
 ];
 
 // ============================================================================

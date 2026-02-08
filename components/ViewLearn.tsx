@@ -240,8 +240,8 @@ export const ViewLearn: React.FC<ViewLearnProps> = ({ onBack, onPractice }) => {
               <div className="flex items-center justify-between">
                 <div>
                   <span className={`text-xs uppercase tracking-wider px-2 py-0.5 rounded ${
-                    lesson.pillar === 'ethos' ? 'bg-blue-100 text-blue-600' :
-                    lesson.pillar === 'pathos' ? 'bg-rose-100 text-rose-600' :
+                    lesson.pillar === 'ethos' ? 'bg-slate-100 text-slate-600' :
+                    lesson.pillar === 'pathos' ? 'bg-stone-100 text-stone-600' :
                     'bg-amber-100 text-amber-600'
                   }`}>
                     {lesson.pillar}

@@ -172,7 +172,7 @@ function TemplateCard({
 }) {
   const categoryColors: Record<string, string> = {
     pitch: 'bg-amber-100 text-amber-700',
-    presentation: 'bg-blue-100 text-blue-700',
+    presentation: 'bg-slate-100 text-slate-700',
     interview: 'bg-emerald-100 text-emerald-700',
   };
 

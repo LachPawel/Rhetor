@@ -35,14 +35,13 @@ const COUNTDOWN_SECONDS = 3;
 interface RoundConfig {
   targetWpm: number;
   label: string;
-  emoji: string;
   description: string;
 }
 
 const ROUNDS: RoundConfig[] = [
-  { targetWpm: 120, label: 'Slow & Steady', emoji: '🐢', description: 'Conversational pace — calm and clear' },
-  { targetWpm: 150, label: 'Confident Cruise', emoji: '🚀', description: 'Presentation pace — energetic but clear' },
-  { targetWpm: 180, label: 'Full Throttle', emoji: '⚡', description: 'Fast-paced pitch — high energy' },
+  { targetWpm: 120, label: 'Slow & Steady', description: 'Conversational pace — calm and clear' },
+  { targetWpm: 150, label: 'Confident Cruise', description: 'Presentation pace — energetic but clear' },
+  { targetWpm: 180, label: 'Full Throttle', description: 'Fast-paced pitch — high energy' },
 ];
 
 /** Pool of ~50-word paragraphs. One is randomly picked per round. */
@@ -123,12 +122,12 @@ function getDrachmaReward(avgAccuracy: number): number {
   return 10;
 }
 
-function getGrade(avgAccuracy: number): { label: string; emoji: string; color: string } {
-  if (avgAccuracy >= 90) return { label: 'MASTER PACER', emoji: '🏆', color: 'text-amber-400' };
-  if (avgAccuracy >= 75) return { label: 'EXCELLENT', emoji: '⭐', color: 'text-emerald-400' };
-  if (avgAccuracy >= 60) return { label: 'GOOD CONTROL', emoji: '👍', color: 'text-blue-400' };
-  if (avgAccuracy >= 40) return { label: 'GETTING THERE', emoji: '💪', color: 'text-purple-400' };
-  return { label: 'KEEP PRACTICING', emoji: '🔄', color: 'text-stone-400' };
+function getGrade(avgAccuracy: number): { label: string; color: string } {
+  if (avgAccuracy >= 90) return { label: 'MASTER PACER', color: 'text-amber-400' };
+  if (avgAccuracy >= 75) return { label: 'EXCELLENT', color: 'text-emerald-400' };
+  if (avgAccuracy >= 60) return { label: 'GOOD CONTROL', color: 'text-slate-400' };
+  if (avgAccuracy >= 40) return { label: 'GETTING THERE', color: 'text-stone-400' };
+  return { label: 'KEEP PRACTICING', color: 'text-stone-500' };
 }
 
 /** Split passage into words with their character offsets */
@@ -594,7 +593,7 @@ export const ViewPaceController: React.FC<ViewPaceControllerProps> = ({ onExit }
             transition={{ delay: 0.55 }}
             className="text-stone-400 text-base max-w-sm mb-2"
           >
-            Read passages at <span className="text-blue-400 font-semibold">3 different speeds</span>.
+            Read passages at <span className="text-slate-400 font-semibold">3 different speeds</span>.
             A karaoke highlight shows the target pace — match it with your voice.
           </motion.p>
 
@@ -608,7 +607,6 @@ export const ViewPaceController: React.FC<ViewPaceControllerProps> = ({ onExit }
             <div className="flex items-center gap-4 text-sm">
               {ROUNDS.map((r, i) => (
                 <div key={i} className="flex flex-col items-center gap-1 px-4 py-3 bg-stone-800/60 rounded-lg border border-stone-700/50">
-                  <span className="text-lg">{r.emoji}</span>
                   <span className="text-white font-mono font-bold">{r.targetWpm}</span>
                   <span className="text-[10px] uppercase tracking-widest text-stone-500">wpm</span>
                 </div>
@@ -632,7 +630,7 @@ export const ViewPaceController: React.FC<ViewPaceControllerProps> = ({ onExit }
 
             <div className="flex items-center gap-6 text-sm text-stone-500 mt-2">
               <div className="flex items-center gap-2">
-                <Timer className="w-4 h-4 text-blue-400" />
+                <Timer className="w-4 h-4 text-slate-400" />
                 <span>3 rounds</span>
               </div>
               <div className="flex items-center gap-2">
@@ -680,10 +678,8 @@ export const ViewPaceController: React.FC<ViewPaceControllerProps> = ({ onExit }
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
             transition={{ type: 'spring', stiffness: 200, damping: 12 }}
-            className="text-7xl mb-4"
-          >
-            {grade.emoji}
-          </motion.div>
+            className="w-20 h-20 rounded-full bg-stone-800 border-2 border-stone-700 mb-4"
+          />
 
           <motion.h2
             initial={{ opacity: 0, y: 20 }}
@@ -740,7 +736,7 @@ export const ViewPaceController: React.FC<ViewPaceControllerProps> = ({ onExit }
                   className={`flex items-center justify-between px-4 py-3 rounded-lg border ${borderColor}`}
                 >
                   <div className="flex items-center gap-3">
-                    <span className="text-lg">{ROUNDS[r.round - 1]?.emoji}</span>
+                    <div className="w-2 h-2 rounded-full bg-stone-600" />
                     <div>
                       <span className="text-sm text-stone-300 font-medium">
                         {ROUNDS[r.round - 1]?.label}
@@ -847,7 +843,7 @@ export const ViewPaceController: React.FC<ViewPaceControllerProps> = ({ onExit }
                 i < currentRound
                   ? 'bg-emerald-400'
                   : i === currentRound
-                    ? 'bg-blue-400'
+                    ? 'bg-slate-400'
                     : 'bg-stone-700'
               }`}
             />
@@ -906,7 +902,7 @@ export const ViewPaceController: React.FC<ViewPaceControllerProps> = ({ onExit }
               <p className="text-stone-400 text-sm mb-2">{roundConfig.description}</p>
 
               <div className="flex items-center gap-2 mb-8">
-                <span className="text-blue-400 font-mono text-xl font-bold">{roundConfig.targetWpm}</span>
+                <span className="text-slate-400 font-mono text-xl font-bold">{roundConfig.targetWpm}</span>
                 <span className="text-stone-500 text-sm">WPM target</span>
               </div>
 
@@ -919,7 +915,7 @@ export const ViewPaceController: React.FC<ViewPaceControllerProps> = ({ onExit }
                 whileHover={{ scale: 1.03 }}
                 whileTap={{ scale: 0.97 }}
                 onClick={startCountdown}
-                className="flex items-center gap-2 px-10 py-3 bg-blue-500 text-white font-bold rounded-xl shadow-lg shadow-blue-500/30 uppercase tracking-wider text-sm"
+                className="flex items-center gap-2 px-10 py-3 bg-slate-600 text-white font-bold rounded-xl shadow-lg uppercase tracking-wider text-sm"
               >
                 <Play className="w-4 h-4" /> Ready
               </motion.button>
@@ -936,14 +932,14 @@ export const ViewPaceController: React.FC<ViewPaceControllerProps> = ({ onExit }
               className="flex flex-col items-center"
             >
               <p className="text-stone-400 text-sm mb-4">
-                Target: <span className="text-blue-400 font-mono font-bold">{roundConfig.targetWpm} WPM</span>
+                Target: <span className="text-slate-400 font-mono font-bold">{roundConfig.targetWpm} WPM</span>
               </p>
               <motion.span
                 key={countdown}
                 initial={{ scale: 0.5, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 exit={{ scale: 1.5, opacity: 0 }}
-                className="text-8xl font-mono font-bold text-blue-400"
+                className="text-8xl font-mono font-bold text-slate-400"
               >
                 {countdown}
               </motion.span>
@@ -965,9 +961,8 @@ export const ViewPaceController: React.FC<ViewPaceControllerProps> = ({ onExit }
               {/* Target badge */}
               <div className="flex items-center justify-between mb-6">
                 <div className="flex items-center gap-2 text-sm">
-                  <span className="text-lg">{roundConfig.emoji}</span>
                   <span className="text-stone-400">Read at</span>
-                  <span className="text-blue-400 font-mono font-bold">{roundConfig.targetWpm} WPM</span>
+                  <span className="text-slate-400 font-mono font-bold">{roundConfig.targetWpm} WPM</span>
                 </div>
 
                 {/* Mic indicator */}
@@ -1038,18 +1033,14 @@ export const ViewPaceController: React.FC<ViewPaceControllerProps> = ({ onExit }
                   initial={{ scale: 0 }}
                   animate={{ scale: 1 }}
                   transition={{ type: 'spring', stiffness: 300, damping: 12 }}
-                  className={`w-20 h-20 rounded-full flex items-center justify-center mb-6 ${
+                  className={`w-20 h-20 rounded-full flex items-center justify-center mb-6 border-2 ${
                     diff <= 10
-                      ? 'bg-emerald-500/20'
+                      ? 'bg-emerald-500/20 border-emerald-500'
                       : diff <= 20
-                        ? 'bg-amber-500/20'
-                        : 'bg-red-500/20'
+                        ? 'bg-amber-500/20 border-amber-500'
+                        : 'bg-stone-700 border-stone-600'
                   }`}
-                >
-                  <span className="text-4xl">
-                    {diff <= 10 ? '🎯' : diff <= 20 ? '👏' : '💪'}
-                  </span>
-                </motion.div>
+                />
 
                 <h3 className="text-2xl font-serif font-bold mb-1">
                   {diff <= 10
@@ -1068,7 +1059,7 @@ export const ViewPaceController: React.FC<ViewPaceControllerProps> = ({ onExit }
                   </div>
                   <div className="text-stone-600">vs</div>
                   <div className="text-center">
-                    <div className="text-3xl font-mono font-bold text-blue-400">
+                    <div className="text-3xl font-mono font-bold text-slate-400">
                       {lastResult.targetWpm}
                     </div>
                     <div className="text-[10px] uppercase tracking-widest text-stone-500">target</div>
@@ -1127,7 +1118,7 @@ export const ViewPaceController: React.FC<ViewPaceControllerProps> = ({ onExit }
             </span>
           </span>
           <span>
-            Target: <span className="text-blue-400 font-bold">{roundConfig.targetWpm} WPM</span>
+            Target: <span className="text-slate-400 font-bold">{roundConfig.targetWpm} WPM</span>
           </span>
         </div>
       )}

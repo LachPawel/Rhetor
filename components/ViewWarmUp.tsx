@@ -5,12 +5,8 @@ import { FadeTransition } from './FadeTransition.tsx';
 import { X, Wind, Pause, ArrowDown, ChevronRight, Music, Waves, Type, SkipForward, Hand, Crown, Footprints, Sparkles, Coins } from 'lucide-react';
 import { useRhetor } from '../contexts/RhetorContext.tsx';
 import { AgentMode } from '../types.ts';
-import {
-  BreathingDetector,
-  type BreathPhase,
-  type BreathingMetrics,
-  getBreathPhaseMessage,
-} from '../lib/breathing_detector.ts';
+
+type BreathPhase = 'idle' | 'inhale' | 'hold' | 'exhale';
 
 interface ViewWarmUpProps {
   onComplete: () => void;
@@ -124,12 +120,22 @@ const BODY_EXERCISES: BodyExercise[] = [
 const TOTAL_BODY_DURATION = BODY_EXERCISES.reduce((s, e) => s + e.totalDuration, 0);
 const DRACHMA_REWARD = 15;
 
-// ── Circle animation config per detected phase ─────────────────────────
+// ── Helper function for breath phase message ──────────────────────────────
+const getBreathPhaseMessage = (phase: BreathPhase): string => {
+  switch (phase) {
+    case 'inhale': return 'Breathe In';
+    case 'hold': return 'Hold';
+    case 'exhale': return 'Breathe Out';
+    default: return 'Ready when you are';
+  }
+};
+
+// ── Circle animation config per phase (black and white only) ─────────────────────
 const PHASE_CIRCLE: Record<BreathPhase, { scale: number; opacity: number; borderColor: string }> = {
-  idle:    { scale: 1,    opacity: 0.3, borderColor: 'rgba(168,162,158,0.4)' },
-  inhale:  { scale: 1.45, opacity: 1,   borderColor: 'rgba(16,185,129,0.8)' },   // emerald
-  hold:    { scale: 1.45, opacity: 0.85, borderColor: 'rgba(99,102,241,0.7)' },   // indigo
-  exhale:  { scale: 0.85, opacity: 0.7,  borderColor: 'rgba(168,162,158,0.6)' },  // stone
+  idle:    { scale: 1,    opacity: 0.3, borderColor: 'rgba(0,0,0,0.2)' },
+  inhale:  { scale: 1.6, opacity: 1,   borderColor: 'rgba(0,0,0,1)' },
+  hold:    { scale: 1.6, opacity: 0.9, borderColor: 'rgba(0,0,0,0.9)' },
+  exhale:  { scale: 0.7, opacity: 0.7,  borderColor: 'rgba(0,0,0,0.4)' },
 };
 const PHASE_TRANSITION: Record<BreathPhase, { duration: number; ease: string }> = {
   idle:    { duration: 0.6, ease: 'easeOut' },
@@ -159,13 +165,13 @@ export const ViewWarmUp: React.FC<ViewWarmUpProps> = ({ onComplete, onExit }) =>
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
 
-  // ── Breathing detector state ──────────────────────────────────────────
-  const detectorRef = useRef<BreathingDetector | null>(null);
+  // ── Breathing state ──────────────────────────────────────────────────────
   const [breathPhase, setBreathPhase] = useState<BreathPhase>('idle');
   const [cycleCount, setCycleCount] = useState(0);
-  const [rhythmScore, setRhythmScore] = useState(0);
   const [breathCompleted, setBreathCompleted] = useState(false);
+  const [breathTimer, setBreathTimer] = useState(0);
   const autoAdvancedRef = useRef(false);
+  const breathIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // ── Voice exercise state ──────────────────────────────────────────────
   const [voiceExIndex, setVoiceExIndex] = useState(0);
@@ -194,51 +200,61 @@ export const ViewWarmUp: React.FC<ViewWarmUpProps> = ({ onComplete, onExit }) =>
     }
   }, [isConnected, setMode]);
 
-  // ── Breathing detector lifecycle ──────────────────────────────────────
+  // ── Simple timer-based breathing cycle ────────────────────────────────────
   useEffect(() => {
-    if (currentStage.id !== 'breathe') {
-      // Clean up if we left the breathe stage
-      if (detectorRef.current) {
-        detectorRef.current.stop();
-        detectorRef.current = null;
+    if (currentStage.id !== 'breathe' || breathCompleted) {
+      if (breathIntervalRef.current) {
+        clearInterval(breathIntervalRef.current);
+        breathIntervalRef.current = null;
+        setBreathPhase('idle');
       }
       return;
     }
 
-    const detector = new BreathingDetector({
-      inhalePattern: [4, 4, 4], // 4-4-4 box breathing
-      volumeThreshold: 0.04,
-      onPhaseChange: (phase: BreathPhase) => {
-        setBreathPhase(phase);
-      },
-      onCycleComplete: (cycle: number, metrics: Partial<BreathingMetrics>) => {
-        setCycleCount(cycle);
-        if (metrics.rhythmScore !== undefined) {
-          setRhythmScore(metrics.rhythmScore);
-        }
-        // Auto-advance after TARGET_CYCLES
-        if (cycle >= TARGET_CYCLES && !autoAdvancedRef.current) {
-          autoAdvancedRef.current = true;
-          setBreathCompleted(true);
-        }
-      },
-    });
-
-    detector.startExternal();
-    detectorRef.current = detector;
+    // Box breathing: 4 inhale, 4 hold, 4 exhale, 4 hold = 16 seconds per cycle
+    const PHASE_DURATION = 4; // 4 seconds
+    const CYCLE_DURATION = PHASE_DURATION * 4;
+    
+    breathIntervalRef.current = setInterval(() => {
+      setBreathTimer(prev => prev + 0.1);
+    }, 100);
 
     return () => {
-      detector.stop();
-      detectorRef.current = null;
+      if (breathIntervalRef.current) {
+        clearInterval(breathIntervalRef.current);
+        breathIntervalRef.current = null;
+      }
     };
-  }, [currentStage.id]);
+  }, [currentStage.id, breathCompleted]);
 
-  // ── Feed volume data from AudioRecorder's VU meter to detector ────────
+  // Update phase based on timer
   useEffect(() => {
-    if (currentStage.id === 'breathe' && detectorRef.current) {
-      detectorRef.current.feedVolume(volume);
+    if (currentStage.id !== 'breathe' || breathCompleted) return;
+    
+    const PHASE_DURATION = 4;
+    const CYCLE_DURATION = PHASE_DURATION * 4;
+    const cycleElapsed = breathTimer % CYCLE_DURATION;
+    const currentCycle = Math.floor(breathTimer / CYCLE_DURATION);
+    
+    if (currentCycle >= TARGET_CYCLES && !autoAdvancedRef.current) {
+      autoAdvancedRef.current = true;
+      setBreathCompleted(true);
+      setBreathPhase('idle');
+      return;
     }
-  }, [volume, currentStage.id]);
+    
+    setCycleCount(currentCycle);
+    
+    if (cycleElapsed < PHASE_DURATION) {
+      setBreathPhase('inhale');
+    } else if (cycleElapsed < PHASE_DURATION * 2) {
+      setBreathPhase('hold');
+    } else if (cycleElapsed < PHASE_DURATION * 3) {
+      setBreathPhase('exhale');
+    } else {
+      setBreathPhase('hold');
+    }
+  }, [breathTimer, currentStage.id, breathCompleted]);
 
   // ── Auto-advance to Voice after breath completed ──────────────────────
   useEffect(() => {
@@ -519,22 +535,11 @@ export const ViewWarmUp: React.FC<ViewWarmUpProps> = ({ onComplete, onExit }) =>
                       Box breathing — 4 · 4 · 4 · 4
                     </p>
 
-                    {/* Pulsing circle synced to detected phase */}
+                    {/* Pulsing circle synced to phase */}
                     <div className="relative flex items-center justify-center mb-10">
-                      {/* Outer glow ring */}
-                      <motion.div
-                        className="absolute w-52 h-52 rounded-full"
-                        animate={{
-                          scale: circleAnim.scale * 1.08,
-                          opacity: circleAnim.opacity * 0.25,
-                        }}
-                        transition={{ duration: circleTrans.duration * 1.1, ease: circleTrans.ease }}
-                        style={{ background: `radial-gradient(circle, ${circleAnim.borderColor} 0%, transparent 70%)` }}
-                      />
-
                       {/* Main breath circle */}
                       <motion.div
-                        className="w-48 h-48 rounded-full border-4 flex items-center justify-center"
+                        className="w-48 h-48 rounded-full border-4 flex items-center justify-center bg-stone-50"
                         animate={{
                           scale: circleAnim.scale,
                           opacity: circleAnim.opacity,
@@ -544,18 +549,11 @@ export const ViewWarmUp: React.FC<ViewWarmUpProps> = ({ onComplete, onExit }) =>
                       >
                         <div className="flex flex-col items-center gap-1">
                           <PhaseIcon phase={breathPhase} />
-                          <span className="text-lg font-light tracking-wide">
+                          <span className="text-lg font-light tracking-wide text-stone-900">
                             {getBreathPhaseMessage(breathPhase)}
                           </span>
                         </div>
                       </motion.div>
-
-                      {/* Volume indicator ring */}
-                      <motion.div
-                        className="absolute w-48 h-48 rounded-full border-2 border-stone-300/30 pointer-events-none"
-                        animate={{ scale: 1 + volume * 0.3, opacity: 0.3 + volume * 0.5 }}
-                        transition={{ duration: 0.08 }}
-                      />
                     </div>
 
                     {/* Cycle counter */}
@@ -570,39 +568,23 @@ export const ViewWarmUp: React.FC<ViewWarmUpProps> = ({ onComplete, onExit }) =>
                           key={i}
                           className={`w-2.5 h-2.5 rounded-full transition-colors duration-300 ${
                             i < cycleCount
-                              ? 'bg-emerald-500'
+                              ? 'bg-stone-900'
                               : i === cycleCount && breathPhase !== 'idle'
-                                ? 'bg-emerald-300 animate-pulse'
+                                ? 'bg-stone-500 animate-pulse'
                                 : 'bg-stone-200'
                           }`}
                         />
                       ))}
                     </div>
 
-                    {/* Rhythm score (show after first cycle) */}
-                    {cycleCount > 0 && (
-                      <motion.p
-                        initial={{ opacity: 0, y: 4 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        className="text-xs text-stone-400"
-                      >
-                        Rhythm consistency:{' '}
-                        <span className={`font-medium ${
-                          rhythmScore >= 70 ? 'text-emerald-600' : rhythmScore >= 40 ? 'text-amber-600' : 'text-red-500'
-                        }`}>
-                          {rhythmScore}%
-                        </span>
-                      </motion.p>
-                    )}
-
                     {/* Completed badge */}
                     {breathCompleted && (
                       <motion.div
                         initial={{ opacity: 0, scale: 0.9 }}
                         animate={{ opacity: 1, scale: 1 }}
-                        className="mt-4 px-4 py-1.5 bg-emerald-50 text-emerald-700 rounded-full text-xs font-medium"
+                        className="mt-4 px-4 py-1.5 bg-stone-100 text-stone-900 border border-stone-300 rounded-full text-xs font-medium"
                       >
-                        ✓ Breathing complete — moving on
+                        Breathing complete
                       </motion.div>
                     )}
                  </motion.div>

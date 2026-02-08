@@ -7,7 +7,7 @@
 
 import React, { useState, useEffect, useCallback, useRef, Component, type ReactNode } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { AlertTriangle, Wifi, WifiOff, RefreshCw } from 'lucide-react';
+import { AlertTriangle, Wifi, WifiOff, RefreshCw, Sparkles, Star, Trophy, Flame, Coins } from 'lucide-react';
 
 // Views
 import { ViewHome } from './components/ViewHome';
@@ -152,19 +152,49 @@ function CelebrationOverlay() {
       className="fixed inset-0 pointer-events-none z-40 flex items-center justify-center"
     >
       {celebrationPending === 'confetti' && (
-        <div className="text-6xl animate-bounce">🎉</div>
+        <motion.div
+          initial={{ scale: 0 }}
+          animate={{ scale: 1 }}
+          className="w-16 h-16 rounded-full bg-stone-100 border-2 border-stone-900 flex items-center justify-center animate-bounce"
+        >
+          <Sparkles className="w-8 h-8 text-stone-900" />
+        </motion.div>
       )}
       {celebrationPending === 'coins' && (
-        <div className="text-6xl animate-bounce">💰</div>
+        <motion.div
+          initial={{ scale: 0 }}
+          animate={{ scale: 1 }}
+          className="w-16 h-16 rounded-full bg-stone-100 border-2 border-stone-900 flex items-center justify-center animate-bounce"
+        >
+          <Coins className="w-8 h-8 text-stone-900" />
+        </motion.div>
       )}
       {celebrationPending === 'stars' && (
-        <div className="text-6xl animate-bounce">⭐</div>
+        <motion.div
+          initial={{ scale: 0 }}
+          animate={{ scale: 1 }}
+          className="w-16 h-16 rounded-full bg-stone-100 border-2 border-stone-900 flex items-center justify-center animate-bounce"
+        >
+          <Star className="w-8 h-8 text-stone-900" />
+        </motion.div>
       )}
       {celebrationPending === 'achievement' && (
-        <div className="text-6xl animate-bounce">🏆</div>
+        <motion.div
+          initial={{ scale: 0 }}
+          animate={{ scale: 1 }}
+          className="w-16 h-16 rounded-full bg-stone-100 border-2 border-stone-900 flex items-center justify-center animate-bounce"
+        >
+          <Trophy className="w-8 h-8 text-stone-900" />
+        </motion.div>
       )}
       {celebrationPending === 'streak' && (
-        <div className="text-6xl animate-bounce">🔥</div>
+        <motion.div
+          initial={{ scale: 0 }}
+          animate={{ scale: 1 }}
+          className="w-16 h-16 rounded-full bg-stone-100 border-2 border-stone-900 flex items-center justify-center animate-bounce"
+        >
+          <Flame className="w-8 h-8 text-stone-900" />
+        </motion.div>
       )}
     </motion.div>
   );
@@ -492,7 +522,7 @@ function AppContent() {
               animate={{ scale: 1, opacity: 1 }}
               className="bg-white rounded-xl p-8 max-w-sm w-full shadow-xl text-center"
             >
-              <div className="text-4xl mb-4">✨</div>
+              <div className="w-12 h-12 mx-auto rounded-full bg-slate-500/20 border-2 border-slate-500 mb-4" />
               <h3 className="font-serif text-xl font-medium mb-2">Ready to speak?</h3>
               <p className="text-stone-500 text-sm mb-6">
                 Your warm-up is complete. What would you like to do next?
@@ -505,7 +535,7 @@ function AppContent() {
                   }}
                   className="w-full flex items-center justify-center gap-2 py-3 bg-slate-700 text-white rounded-lg font-medium text-sm hover:bg-slate-800 transition-colors"
                 >
-                  📝 Prepare Content
+                  Prepare Content
                 </button>
                 <button
                   onClick={() => {
@@ -514,7 +544,7 @@ function AppContent() {
                   }}
                   className="w-full flex items-center justify-center gap-2 py-3 border border-stone-300 text-stone-700 rounded-lg font-medium text-sm hover:bg-stone-50 transition-colors"
                 >
-                  🎤 Quick Practice
+                  Quick Practice
                 </button>
               </div>
             </motion.div>

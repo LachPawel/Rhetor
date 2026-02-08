@@ -86,12 +86,12 @@ function getDrachmaReward(totalFillers: number): number {
   return 10;
 }
 
-function getGrade(totalFillers: number): { label: string; emoji: string; color: string } {
-  if (totalFillers === 0) return { label: 'FLAWLESS', emoji: '🏆', color: 'text-amber-400' };
-  if (totalFillers < 3) return { label: 'EXCELLENT', emoji: '⭐', color: 'text-emerald-400' };
-  if (totalFillers < 5) return { label: 'GOOD', emoji: '👍', color: 'text-blue-400' };
-  if (totalFillers < 8) return { label: 'KEEP GOING', emoji: '💪', color: 'text-purple-400' };
-  return { label: 'PRACTICE MORE', emoji: '🔄', color: 'text-stone-400' };
+function getGrade(totalFillers: number): { label: string; color: string } {
+  if (totalFillers === 0) return { label: 'FLAWLESS', color: 'text-amber-400' };
+  if (totalFillers < 3) return { label: 'EXCELLENT', color: 'text-emerald-400' };
+  if (totalFillers < 5) return { label: 'GOOD', color: 'text-slate-400' };
+  if (totalFillers < 8) return { label: 'KEEP GOING', color: 'text-stone-400' };
+  return { label: 'PRACTICE MORE', color: 'text-stone-500' };
 }
 
 // ============================================================================
@@ -484,10 +484,8 @@ export const ViewKillFillers: React.FC<ViewKillFillersProps> = ({ onExit }) => {
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
             transition={{ type: 'spring', stiffness: 200, damping: 12 }}
-            className="text-7xl mb-4"
-          >
-            {grade.emoji}
-          </motion.div>
+            className="w-20 h-20 rounded-full bg-stone-800 border-2 border-stone-700 mb-4"
+          />
 
           <motion.h2
             initial={{ opacity: 0, y: 20 }}
@@ -830,21 +828,15 @@ export const ViewKillFillers: React.FC<ViewKillFillersProps> = ({ onExit }) => {
                   initial={{ scale: 0 }}
                   animate={{ scale: 1 }}
                   transition={{ type: 'spring', stiffness: 300, damping: 12 }}
-                  className="w-20 h-20 rounded-full bg-emerald-500/20 flex items-center justify-center mb-6"
-                >
-                  <span className="text-4xl">✨</span>
-                </motion.div>
+                  className="w-20 h-20 rounded-full bg-emerald-500/20 border-2 border-emerald-500 mb-6"
+                />
               ) : (
                 <motion.div
                   initial={{ scale: 0 }}
                   animate={{ scale: 1 }}
                   transition={{ type: 'spring', stiffness: 300, damping: 12 }}
-                  className="w-20 h-20 rounded-full bg-amber-500/20 flex items-center justify-center mb-6"
-                >
-                  <span className="text-4xl">
-                    {results[results.length - 1]?.fillerCount < 3 ? '👏' : '💪'}
-                  </span>
-                </motion.div>
+                  className="w-20 h-20 rounded-full bg-stone-700 border-2 border-stone-600 mb-6"
+                />
               )}
 
               {/* Filler count for this round */}

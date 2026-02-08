@@ -21,8 +21,8 @@ const fmtTime = (s: number) => {
 };
 
 const CATEGORY_COLORS: Record<string, { accent: string; accentBg: string; ring: string }> = {
-  breathing: { accent: 'text-blue-400', accentBg: 'bg-blue-500', ring: 'shadow-[0_0_40px_rgba(59,130,246,0.4)]' },
-  voice:     { accent: 'text-purple-400', accentBg: 'bg-purple-500', ring: 'shadow-[0_0_40px_rgba(168,85,247,0.4)]' },
+  breathing: { accent: 'text-slate-400', accentBg: 'bg-slate-500', ring: 'shadow-[0_0_40px_rgba(100,116,139,0.4)]' },
+  voice:     { accent: 'text-stone-400', accentBg: 'bg-stone-500', ring: 'shadow-[0_0_40px_rgba(120,113,108,0.4)]' },
   technique: { accent: 'text-amber-400', accentBg: 'bg-amber-500', ring: 'shadow-[0_0_40px_rgba(245,158,11,0.4)]' },
 };
 
@@ -45,7 +45,7 @@ const toLegacy = (l: AcademyLesson): LegacyLesson => ({
 
 // ─── Step Type Icons ─────────────────────────────────────────────────
 const StepIcon: React.FC<{ step: LessonStep; isSpeaking: boolean; className?: string }> = ({ step, isSpeaking, className = 'w-8 h-8' }) => {
-  if (step.expectedAction === 'breathe') return <Wind className={`${className} text-blue-400`} />;
+  if (step.expectedAction === 'breathe') return <Wind className={`${className} text-slate-400`} />;
   if (step.expectedAction === 'listen' || step.type === 'explain' || step.type === 'demonstrate')
     return <Ear className={`${className} text-stone-400`} />;
   return <Mic className={`${className} text-white`} />;

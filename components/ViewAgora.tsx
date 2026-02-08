@@ -9,7 +9,6 @@ import { lessons, type Lesson as AcademyLesson } from '../src/data/lessons.ts';
 // ─── Category Definitions ────────────────────────────────────────────
 const CATEGORIES: {
   key: AcademyLesson['category'];
-  emoji: string;
   label: string;
   accent: string;       // left bar + play button bg
   badgeBg: string;      // duration / reward badge
@@ -19,27 +18,24 @@ const CATEGORIES: {
 }[] = [
   {
     key: 'breathing',
-    emoji: '🫁',
     label: 'Breathing',
-    accent: 'bg-blue-500',
-    badgeBg: 'bg-blue-50',
-    badgeText: 'text-blue-600',
-    cardBorder: 'hover:border-blue-300',
-    completedBg: 'bg-blue-50/60',
+    accent: 'bg-slate-500',
+    badgeBg: 'bg-slate-50',
+    badgeText: 'text-slate-600',
+    cardBorder: 'hover:border-slate-300',
+    completedBg: 'bg-slate-50/60',
   },
   {
     key: 'voice',
-    emoji: '🎤',
     label: 'Voice',
-    accent: 'bg-purple-500',
-    badgeBg: 'bg-purple-50',
-    badgeText: 'text-purple-600',
-    cardBorder: 'hover:border-purple-300',
-    completedBg: 'bg-purple-50/60',
+    accent: 'bg-stone-500',
+    badgeBg: 'bg-stone-50',
+    badgeText: 'text-stone-600',
+    cardBorder: 'hover:border-stone-300',
+    completedBg: 'bg-stone-50/60',
   },
   {
     key: 'technique',
-    emoji: '💡',
     label: 'Technique',
     accent: 'bg-amber-500',
     badgeBg: 'bg-amber-50',
@@ -101,7 +97,6 @@ export const ViewAgora: React.FC<ViewAgoraProps> = ({ onSelectLesson }) => {
               {/* Category Header */}
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2.5">
-                  <span className="text-xl">{cat.emoji}</span>
                   <h2 className="text-lg serif font-medium text-stone-900">{cat.label}</h2>
                 </div>
                 <span className="text-xs text-stone-400 font-mono">
