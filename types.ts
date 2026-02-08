@@ -13,6 +13,7 @@ export enum AppView {
   REVIEW = 'REVIEW',
   LESSON = 'LESSON',
   KILL_FILLERS = 'KILL_FILLERS',
+  PACE_CONTROLLER = 'PACE_CONTROLLER',
 }
 
 export enum AgentMode {

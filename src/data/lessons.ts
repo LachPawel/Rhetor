@@ -388,6 +388,57 @@ export const lessons: Lesson[] = [
       },
     ],
   },
+
+  // ── 9. Pace Controller ─────────────────────────────────────────────
+  {
+    id: 'pace-controller',
+    title: 'Pace Controller',
+    category: 'technique',
+    pillar: 'kairos',
+    duration: 180,
+    drachmas: 30,
+    description:
+      'Learn what 120, 150, and 180 WPM actually feel like by reading passages with a karaoke-style pace guide.',
+    prerequisite: 'the-power-pause',
+    steps: [
+      {
+        type: 'explain',
+        instruction:
+          'Speed matters. 120 WPM is calm and conversational. 150 WPM is an energetic presentation pace. 180 WPM is rapid-fire. Most people have no idea how fast they actually talk.',
+        aiPrompt:
+          'Explain to the student that speaking pace is measured in words per minute (WPM). Describe three common speed zones: 120 WPM (slow, deliberate, great for emphasis), 150 WPM (standard presentation pace, clear and energetic), and 180 WPM (fast-paced, used for high-energy pitches or storytelling). Tell them they will practice reading at each speed with a visual guide.',
+        duration: 25,
+        expectedAction: 'listen',
+      },
+      {
+        type: 'practice',
+        instruction:
+          'Round 1 — Read the passage at 120 WPM. Follow the karaoke highlight across the text.',
+        aiPrompt:
+          'The student will read a passage at 120 WPM with a visual pace guide. Listen to their reading and evaluate how well they matched the target speed. This is handled by the interactive Pace Controller game.',
+        duration: 50,
+        expectedAction: 'speak',
+      },
+      {
+        type: 'practice',
+        instruction:
+          'Round 2 — Now at 150 WPM. Feel the energy increase as the highlight moves faster.',
+        aiPrompt:
+          'The student will read a passage at 150 WPM. Listen and evaluate their pace control at this faster speed.',
+        duration: 45,
+        expectedAction: 'speak',
+      },
+      {
+        type: 'practice',
+        instruction:
+          'Round 3 — Full throttle at 180 WPM. Can you keep up while staying clear?',
+        aiPrompt:
+          'The student will read a passage at 180 WPM. This is the fastest round. Evaluate clarity and pace accuracy.',
+        duration: 40,
+        expectedAction: 'speak',
+      },
+    ],
+  },
 ];
 
 // ─── Helpers ─────────────────────────────────────────────────────────

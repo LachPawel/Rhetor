@@ -21,6 +21,7 @@ import { ViewPrep } from './components/ViewPrep';
 import { ViewPractice } from './components/ViewPractice';
 import { ViewReview } from './components/ViewReview';
 import { ViewKillFillers } from './components/ViewKillFillers';
+import { ViewPaceController } from './components/ViewPaceController';
 import { BottomNav } from './components/BottomNav';
 import { AIStatusOrb } from './components/AIStatusOrb';
 
@@ -310,6 +311,7 @@ function AppContent() {
       REVIEW: AppView.REVIEW,
       LESSON: AppView.LESSON,
       KILL_FILLERS: AppView.KILL_FILLERS,
+      PACE_CONTROLLER: AppView.PACE_CONTROLLER,
     };
     
     if (viewMap[storeView] !== undefined && viewMap[storeView] !== localView) {
@@ -332,13 +334,18 @@ function AppContent() {
     AppView.REVIEW,
     AppView.LESSON,
     AppView.KILL_FILLERS,
+    AppView.PACE_CONTROLLER,
   ].includes(localView);
 
   // Handlers
   const handleLessonSelect = useCallback((lesson: Lesson) => {
-    // Special: "Kill the Fillers" launches the interactive game
+    // Special: interactive game lessons
     if (lesson.id === 'kill-the-fillers') {
       handleViewChange(AppView.KILL_FILLERS);
+      return;
+    }
+    if (lesson.id === 'pace-controller') {
+      handleViewChange(AppView.PACE_CONTROLLER);
       return;
     }
     setActiveLesson(lesson);
@@ -357,9 +364,13 @@ function AppContent() {
   }, [handleViewChange, rhetor]);
 
   const handleStartLessonById = useCallback((lessonId: string) => {
-    // Special: "Kill the Fillers" launches the interactive game
+    // Special: interactive game lessons
     if (lessonId === 'kill-the-fillers') {
       handleViewChange(AppView.KILL_FILLERS);
+      return;
+    }
+    if (lessonId === 'pace-controller') {
+      handleViewChange(AppView.PACE_CONTROLLER);
       return;
     }
     const found = academyLessons.find(l => l.id === lessonId);
@@ -396,6 +407,11 @@ function AppContent() {
   }, [handleViewChange, rhetor]);
 
   const handleKillFillersExit = useCallback(() => {
+    handleViewChange(AppView.AGORA);
+    rhetor.setMode('welcomer');
+  }, [handleViewChange, rhetor]);
+
+  const handlePaceControllerExit = useCallback(() => {
     handleViewChange(AppView.AGORA);
     rhetor.setMode('welcomer');
   }, [handleViewChange, rhetor]);
@@ -544,6 +560,13 @@ function AppContent() {
           <ViewKillFillers
             key="kill-fillers"
             onExit={handleKillFillersExit}
+          />
+        )}
+
+        {localView === AppView.PACE_CONTROLLER && (
+          <ViewPaceController
+            key="pace-controller"
+            onExit={handlePaceControllerExit}
           />
         )}
 
