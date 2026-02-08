@@ -2,18 +2,16 @@
 import React from 'react';
 
 export enum AppView {
+  LANDING = 'LANDING',
   HOME = 'HOME',
   AGORA = 'AGORA',
   SYMPOSIUM = 'SYMPOSIUM',
   PROFILE = 'PROFILE',
   WARMUP = 'WARMUP',
-  INPUT = 'INPUT', // Content Preparation
-  PREP = 'PREP', // Pitch Builder (AI Interview)
+  PREP = 'PREP', // Pitch Builder
   PRACTICE = 'PRACTICE',
   REVIEW = 'REVIEW',
   LESSON = 'LESSON',
-  KILL_FILLERS = 'KILL_FILLERS',
-  PACE_CONTROLLER = 'PACE_CONTROLLER',
 }
 
 export enum AgentMode {
@@ -23,8 +21,7 @@ export enum AgentMode {
   INTERVIEWER = 'INTERVIEWER',
   COACH_PRACTICE = 'COACH_PRACTICE',
   ANALYST = 'ANALYST',
-  COACH_LESSON = 'COACH_LESSON',
-  CONTENT_BUILDER = 'CONTENT_BUILDER',
+  COACH_LESSON = 'COACH_LESSON'
 }
 
 export interface UserProfile {
@@ -81,7 +78,6 @@ export interface RhetorContextType {
   isConnected: boolean;
   isConnecting: boolean;
   isSpeaking: boolean;
-  volume: number;
   connect: () => Promise<void>;
   disconnect: () => void;
   setMode: (mode: AgentMode, contextData?: any) => void;

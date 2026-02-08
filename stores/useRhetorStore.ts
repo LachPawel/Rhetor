@@ -663,7 +663,7 @@ export const useRhetorStore = create<RhetorStore>()(
       // ========================================================================
       // UI SLICE
       // ========================================================================
-      currentView: 'HOME',
+      currentView: 'LANDING',
       previousView: null,
       visuals: {},
       timer: { active: false },

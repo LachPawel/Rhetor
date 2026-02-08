@@ -7,6 +7,7 @@
  */
 
 import { useRhetorContext } from '../lib/useRhetor';
+export { RhetorProvider } from '../lib/useRhetor';
 import { useRhetorStore } from '../stores/useRhetorStore';
 import { AgentMode, type RhetorContextType } from '../types';
 import type { AIMode } from '../stores/useRhetorStore';
