@@ -16,7 +16,7 @@ const PERSONAS = [
 ];
 
 export const ViewSimulation: React.FC<ViewSimulationProps> = ({ onBack }) => {
-    const { setMode, isConnected, isSpeaking, aiResponse, connect } = useRhetor();
+    const { setMode, isConnected, isSpeaking, aiResponse, lastTranscript, connect } = useRhetor();
     const [selectedPersona, setSelectedPersona] = useState<string | null>(null);
     const [isActive, setIsActive] = useState(false);
     const [stream, setStream] = useState<MediaStream | null>(null);
@@ -41,20 +41,32 @@ export const ViewSimulation: React.FC<ViewSimulationProps> = ({ onBack }) => {
         }
     }, [isActive, selectedPersona, setMode]);
 
-    // Camera setup for self-view (optional, but good for immersion)
+    // Track stream in a ref so cleanup always sees the latest value
+    const streamRef = useRef<MediaStream | null>(null);
+
+    // Camera setup for self-view
     useEffect(() => {
         if (isActive) {
             navigator.mediaDevices.getUserMedia({ video: true })
                 .then(s => {
+                    streamRef.current = s;
                     setStream(s);
-                    if (videoRef.current) videoRef.current.srcObject = s;
                 })
                 .catch(console.error);
         }
         return () => {
-            if (stream) stream.getTracks().forEach(t => t.stop());
+            streamRef.current?.getTracks().forEach(t => t.stop());
+            streamRef.current = null;
+            setStream(null);
         };
     }, [isActive]);
+
+    // Assign srcObject once both the stream and the video element exist
+    useEffect(() => {
+        if (videoRef.current && stream) {
+            videoRef.current.srcObject = stream;
+        }
+    }, [stream]);
 
     const persona = PERSONAS.find(p => p.id === selectedPersona);
 
@@ -126,8 +138,18 @@ export const ViewSimulation: React.FC<ViewSimulationProps> = ({ onBack }) => {
 
                     {/* User Self-View (Corner) */}
                     <div className="absolute bottom-24 right-6 w-32 aspect-video bg-black rounded-lg overflow-hidden border border-stone-800 shadow-2xl">
-                         {stream && <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover transform -scale-x-100" />}
+                         <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover transform -scale-x-100" />
                     </div>
+
+                    {/* User Transcript */}
+                    {lastTranscript && (
+                        <div className="px-8 flex flex-col items-center text-center">
+                            <span className="text-[10px] font-mono uppercase tracking-widest text-stone-600 mb-1">You</span>
+                            <p className="text-sm text-stone-400 max-w-xl leading-relaxed">
+                                {lastTranscript}
+                            </p>
+                        </div>
+                    )}
 
                     {/* AI Feedback / Subtitles */}
                     <div className="p-8 pb-32 flex flex-col items-center text-center min-h-[160px]">
