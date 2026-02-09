@@ -1,11 +1,13 @@
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { ArrowLeft, Check, Eye, EyeOff, MessageSquare } from 'lucide-react';
+import { ArrowLeft, Check, Eye, EyeOff, MessageSquare, Activity } from 'lucide-react';
 import { FadeTransition } from './FadeTransition.tsx';
 import { SessionResult, AgentMode } from '../types.ts';
 import { useRhetor } from '../contexts/RhetorContext.tsx';
 import { useRhetorStore } from '../stores/useRhetorStore.ts';
 import { createTeleprompterMatcher } from '../src/lib/teleprompter_matcher.ts';
+import { PostureDetector, type PostureFrame } from '../lib/posture_detector.ts';
+import { PostureSkeleton } from './PostureSkeleton.tsx';
 
 interface ViewPracticeProps {
   onEnd: (result: SessionResult) => void;
@@ -32,6 +34,14 @@ export const ViewPractice: React.FC<ViewPracticeProps> = ({ onEnd }) => {
   const duration = suggestedDuration > 0 ? suggestedDuration : 120;
   const [timeLeft, setTimeLeft] = useState(duration);
   const [stream, setStream] = useState<MediaStream | null>(null);
+
+  // ── Posture detection state ──────────────────────────────────
+  const postureDetectorRef = useRef<PostureDetector | null>(null);
+  const [postureFrame, setPostureFrame] = useState<PostureFrame | null>(null);
+  const [showSkeleton, setShowSkeleton] = useState(true);
+  const [postureReady, setPostureReady] = useState(false);
+  const postureScoresRef = useRef<number[]>([]);
+  const [videoDimensions, setVideoDimensions] = useState({ width: 0, height: 0 });
 
   // ── Start metrics session on mount, enable nav guard ─────────────
   useEffect(() => {
@@ -185,6 +195,59 @@ export const ViewPractice: React.FC<ViewPracticeProps> = ({ onEnd }) => {
     }
   }, [stream]);
 
+  // ── Posture detector lifecycle ──────────────────────────────────
+  useEffect(() => {
+    let cancelled = false;
+    const detector = new PostureDetector({
+      intervalMs: 300,
+      minKeypointScore: 0.3,
+      onFrame: (frame: PostureFrame) => {
+        if (cancelled) return;
+        setPostureFrame(frame);
+        postureScoresRef.current.push(frame.score);
+      },
+    });
+    postureDetectorRef.current = detector;
+
+    detector.init().then(() => {
+      if (cancelled) return;
+      setPostureReady(true);
+      console.log('[ViewPractice] PostureDetector ready');
+    }).catch((err) => {
+      console.warn('[ViewPractice] PostureDetector init failed:', err);
+    });
+
+    return () => {
+      cancelled = true;
+      detector.dispose();
+    };
+  }, []);
+
+  // Start posture detection once both detector and video are ready
+  useEffect(() => {
+    if (!postureReady || !videoRef.current || !stream) return;
+    const video = videoRef.current;
+
+    const tryStart = () => {
+      if (video.readyState >= 2 && postureDetectorRef.current?.ready) {
+        // Capture intrinsic video dimensions for canvas sizing
+        setVideoDimensions({ width: video.videoWidth, height: video.videoHeight });
+        postureDetectorRef.current.start(video);
+      }
+    };
+
+    if (video.readyState >= 2) {
+      tryStart();
+    } else {
+      video.addEventListener('loadeddata', tryStart, { once: true });
+    }
+
+    return () => {
+      postureDetectorRef.current?.stop();
+      video.removeEventListener('loadeddata', tryStart);
+    };
+  }, [postureReady, stream]);
+
   // Guard against double-firing finishSession
   const sessionEndedRef = useRef(false);
 
@@ -194,9 +257,14 @@ export const ViewPractice: React.FC<ViewPracticeProps> = ({ onEnd }) => {
     // Finalize the metrics session so endTime & duration are set
     endSession();
     const actualElapsed = Math.floor((Date.now() - statsRef.current.startTime) / 1000);
+    // Compute average posture score over the session
+    const scores = postureScoresRef.current;
+    const avgPosture = scores.length > 0
+      ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length)
+      : 0;
     onEnd({
       durationSeconds: actualElapsed,
-      postureScore: 0,
+      postureScore: avgPosture,
       eyeContactScore: 0,
       fillersCount: useRhetorStore.getState().currentMetrics?.fillerCount ?? 0,
       wpm: useRhetorStore.getState().currentMetrics?.wpm ?? 0,
@@ -256,6 +324,18 @@ export const ViewPractice: React.FC<ViewPracticeProps> = ({ onEnd }) => {
           </div>
           <div className="w-px h-4 bg-stone-200" />
           <div className={`text-sm font-mono ${getWpmColor(liveWpm)}`}>{liveWpm > 0 ? `${liveWpm} wpm` : '— wpm'}</div>
+          <div className="w-px h-4 bg-stone-200" />
+          <div className={`text-sm font-mono ${
+            postureFrame
+              ? (postureFrame.calibrating ? 'text-stone-400' : postureFrame.score >= 80 ? 'text-emerald-600' : postureFrame.score >= 50 ? 'text-amber-500' : 'text-red-500')
+              : 'text-stone-400'
+          }`}>
+            {postureFrame
+              ? (postureFrame.calibrating
+                ? `Calibrating… ${postureFrame.calibrationProgress}/40`
+                : `${postureFrame.score}% posture`)
+              : (postureReady ? 'Detecting…' : 'Loading AI…')}
+          </div>
           <div className={`text-xl font-mono ${timeLeft <= 10 ? 'text-amber-600' : 'text-stone-900'}`}>{Math.floor(timeLeft/60)}:{(timeLeft%60).toString().padStart(2,'0')}</div>
         </div>
       </div>
@@ -263,6 +343,28 @@ export const ViewPractice: React.FC<ViewPracticeProps> = ({ onEnd }) => {
       <div className="flex-1 flex items-center justify-center relative w-full">
         <div className="w-full aspect-video max-w-4xl bg-black rounded-sm overflow-hidden relative shadow-2xl">
           {stream && <video ref={videoRef} autoPlay playsInline muted className="absolute inset-0 w-full h-full object-cover transform -scale-x-100" />}
+
+          {/* POSTURE SKELETON OVERLAY */}
+          {showSkeleton && postureFrame && videoDimensions.width > 0 && (
+            <PostureSkeleton
+              keypoints={postureFrame.keypoints}
+              videoWidth={videoDimensions.width}
+              videoHeight={videoDimensions.height}
+              score={postureFrame.score}
+            />
+          )}
+
+          {/* POSTURE TIP / CALIBRATION BADGE */}
+          {postureFrame?.calibrating && (
+            <div className="absolute top-3 left-1/2 -translate-x-1/2 z-20 bg-black/60 backdrop-blur-sm text-white/70 text-xs font-mono px-4 py-1.5 rounded-full tracking-wider">
+              Hold good posture — calibrating…
+            </div>
+          )}
+          {!postureFrame?.calibrating && postureFrame?.tip && (
+            <div className="absolute top-3 left-1/2 -translate-x-1/2 z-20 bg-black/70 backdrop-blur-sm text-white text-xs font-mono px-4 py-1.5 rounded-full tracking-wider animate-pulse">
+              {postureFrame.tip}
+            </div>
+          )}
           
           {/* TELEPROMPTER OVERLAY */}
           {talkingPoints && talkingPoints.length > 0 && showPrompter && (
@@ -356,6 +458,9 @@ export const ViewPractice: React.FC<ViewPracticeProps> = ({ onEnd }) => {
             )}
             <button onClick={() => setShowTranscript(!showTranscript)} className={`transition-colors ${showTranscript ? 'text-stone-900' : 'text-stone-400 hover:text-stone-900'}`} title="Toggle transcript">
                 <MessageSquare className="w-4 h-4" />
+            </button>
+            <button onClick={() => setShowSkeleton(!showSkeleton)} className={`transition-colors ${showSkeleton ? 'text-emerald-600' : 'text-stone-400 hover:text-stone-900'}`} title="Toggle posture skeleton">
+                <Activity className="w-4 h-4" />
             </button>
         </div>
         <button onClick={finishSession} className="text-stone-900 hover:text-red-600 tracking-widest uppercase text-xs border-b border-stone-200 hover:border-red-600 pb-1 transition-all">End Session</button>
