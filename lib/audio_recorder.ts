@@ -33,7 +33,6 @@ export class AudioRecorder {
             echoCancellation: true,
             noiseSuppression: true,
             autoGainControl: true,
-            sampleRate: this.sampleRate,
           },
         });
         this.audioContext = await audioContext({ sampleRate: this.sampleRate });
