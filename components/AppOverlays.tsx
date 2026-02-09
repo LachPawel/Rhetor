@@ -73,13 +73,8 @@ export function CelebrationOverlay() {
   if (!celebrationPending) return null;
 
   return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="fixed inset-0 pointer-events-none z-40 flex items-center justify-center bg-white/50 backdrop-blur-sm"
-    >
-      {celebrationPending === 'confetti' && (
+    <>
+      {/* {celebrationPending === 'confetti' && (
         <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} className="w-24 h-24 rounded-full bg-white border-2 border-stone-900 flex items-center justify-center animate-bounce shadow-xl">
           <Sparkles className="w-12 h-12 text-stone-900" />
         </motion.div>
@@ -103,8 +98,8 @@ export function CelebrationOverlay() {
          <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} className="w-24 h-24 rounded-full bg-white border-2 border-stone-900 flex items-center justify-center animate-bounce shadow-xl">
           <Flame className="w-12 h-12 text-stone-900" />
         </motion.div>
-      )}
-    </motion.div>
+      )} */}
+    </>
   );
 }
 
