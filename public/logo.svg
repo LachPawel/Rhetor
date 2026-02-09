@@ -1,0 +1,69 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 260">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="800" y2="260" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#1c1917"/>
+      <stop offset="100%" stop-color="#292524"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#d4a574"/>
+      <stop offset="100%" stop-color="#b08050"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="800" height="260" rx="28" fill="url(#bg)"/>
+
+  <!-- Decorative top/bottom lines -->
+  <line x1="60" y1="38" x2="740" y2="38" stroke="#78716c" stroke-width="0.5" opacity="0.4"/>
+  <line x1="60" y1="222" x2="740" y2="222" stroke="#78716c" stroke-width="0.5" opacity="0.4"/>
+
+  <!-- Left laurel branch -->
+  <g transform="translate(100, 130)" fill="none" stroke="url(#gold)" stroke-width="1.5" opacity="0.7">
+    <path d="M0,0 C-8,-20 -20,-30 -10,-50"/>
+    <path d="M-3,-10 C-18,-15 -25,-10 -28,-18"/>
+    <path d="M-5,-22 C-22,-24 -30,-18 -34,-28"/>
+    <path d="M-7,-34 C-24,-33 -32,-26 -36,-38"/>
+    <path d="M-8,-46 C-22,-42 -28,-34 -30,-48"/>
+    <path d="M0,0 C-8,20 -20,30 -10,50"/>
+    <path d="M-3,10 C-18,15 -25,10 -28,18"/>
+    <path d="M-5,22 C-22,24 -30,18 -34,28"/>
+    <path d="M-7,34 C-24,33 -32,26 -36,38"/>
+    <path d="M-8,46 C-22,42 -28,34 -30,48"/>
+  </g>
+
+  <!-- Right laurel branch -->
+  <g transform="translate(700, 130) scale(-1,1)" fill="none" stroke="url(#gold)" stroke-width="1.5" opacity="0.7">
+    <path d="M0,0 C-8,-20 -20,-30 -10,-50"/>
+    <path d="M-3,-10 C-18,-15 -25,-10 -28,-18"/>
+    <path d="M-5,-22 C-22,-24 -30,-18 -34,-28"/>
+    <path d="M-7,-34 C-24,-33 -32,-26 -36,-38"/>
+    <path d="M-8,-46 C-22,-42 -28,-34 -30,-48"/>
+    <path d="M0,0 C-8,20 -20,30 -10,50"/>
+    <path d="M-3,10 C-18,15 -25,10 -28,18"/>
+    <path d="M-5,22 C-22,24 -30,18 -34,28"/>
+    <path d="M-7,34 C-24,33 -32,26 -36,38"/>
+    <path d="M-8,46 C-22,42 -28,34 -30,48"/>
+  </g>
+
+  <!-- Greek column icon -->
+  <g transform="translate(400, 78)" fill="#fafaf9" opacity="0.9">
+    <!-- Capital -->
+    <rect x="-18" y="0" width="36" height="5" rx="1"/>
+    <rect x="-22" y="-4" width="44" height="5" rx="2"/>
+    <!-- Shaft with flutes -->
+    <rect x="-14" y="5" width="28" height="50" rx="1"/>
+    <line x1="-8" y1="8" x2="-8" y2="52" stroke="#1c1917" stroke-width="1" opacity="0.3"/>
+    <line x1="-2" y1="8" x2="-2" y2="52" stroke="#1c1917" stroke-width="1" opacity="0.3"/>
+    <line x1="4" y1="8" x2="4" y2="52" stroke="#1c1917" stroke-width="1" opacity="0.3"/>
+    <line x1="10" y1="8" x2="10" y2="52" stroke="#1c1917" stroke-width="1" opacity="0.3"/>
+    <!-- Base -->
+    <rect x="-17" y="55" width="34" height="5" rx="1"/>
+    <rect x="-20" y="59" width="40" height="4" rx="1"/>
+  </g>
+
+  <!-- App name: RHETOR -->
+  <text x="400" y="175" text-anchor="middle" font-family="'Cormorant Garamond', 'Times New Roman', Georgia, serif" font-weight="700" font-size="62" fill="#fafaf9" letter-spacing="14">RHETOR</text>
+
+  <!-- Tagline -->
+  <text x="400" y="206" text-anchor="middle" font-family="'Inter', 'Helvetica Neue', Arial, sans-serif" font-weight="300" font-size="14" fill="#a8a29e" letter-spacing="4">THE ART OF SPEAKING WELL</text>
+</svg>
