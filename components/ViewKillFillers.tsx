@@ -111,6 +111,7 @@ export const ViewKillFillers: React.FC<ViewKillFillersProps> = ({ onExit }) => {
     lastTranscript,
     addDrachmas,
     completeLesson,
+    resetTranscript
   } = useRhetor();
 
   // ── Store ──────────────────────────────────────────────────────────
@@ -162,6 +163,7 @@ export const ViewKillFillers: React.FC<ViewKillFillersProps> = ({ onExit }) => {
   useEffect(() => {
     if (isConnected && !modeSetRef.current) {
       modeSetRef.current = true;
+      // Set Mode
       setMode(AgentMode.COACH_LESSON, {
         lessonId: 'kill-the-fillers',
         lessonTitle: 'Kill the Fillers',
@@ -170,9 +172,9 @@ export const ViewKillFillers: React.FC<ViewKillFillersProps> = ({ onExit }) => {
         step: {
           index: 0,
           total: TOTAL_ROUNDS,
-          type: 'practice',
+          type: 'intro',
           aiPrompt:
-            'You are the host of "Kill the Fillers" — a fast-paced game. Wait for instructions before asking a question.',
+            'SYSTEM RESET: Starting new "Kill the Fillers" game. Forget all previous context. You are the energetic host. Briefly welcome the player and tell them to press Start. Do NOT ask a question yet.',
           expectedAction: 'speak',
           duration: ROUND_DURATION,
         },
@@ -228,7 +230,7 @@ export const ViewKillFillers: React.FC<ViewKillFillersProps> = ({ onExit }) => {
   // ============================================================================
 
   /** Start a round: show 3-2-1 countdown, then let user speak */
-  const startRound = useCallback(() => {
+  const startRound = useCallback((roundIdx: number) => {
     setPhase('countdown');
     setCountdown(COUNTDOWN_BEFORE_ROUND);
     setLastFeedback(null);
@@ -240,10 +242,10 @@ export const ViewKillFillers: React.FC<ViewKillFillersProps> = ({ onExit }) => {
       lessonId: 'kill-the-fillers',
       lessonTitle: 'Kill the Fillers',
       step: {
-        index: currentRound,
+        index: roundIdx,
         total: TOTAL_ROUNDS,
         type: 'practice',
-        aiPrompt: `You are the host of "Kill the Fillers." Ask this question in an energetic, game-show style: "${questions[currentRound]}". Then say "GO!" and listen. Do NOT speak again until told. Keep it to 1-2 sentences max.`,
+        aiPrompt: `Round ${roundIdx + 1}: Ask this question in an energetic, game-show style: "${questions[roundIdx]}". Then say "GO!" and listen. Do NOT speak again until told. Keep it to 1-2 sentences max.`,
         expectedAction: 'speak',
         duration: ROUND_DURATION,
       },
@@ -260,21 +262,18 @@ export const ViewKillFillers: React.FC<ViewKillFillersProps> = ({ onExit }) => {
         return prev - 1;
       });
     }, 1000);
-  }, [currentRound, questions, setMode]);
+  }, [questions, setMode]); // Removed currentRound dependency, passed as arg instead
 
   /** User is now speaking — start the timer + filler tracking */
   const beginSpeaking = useCallback(() => {
     setPhase('speaking');
     setTimer(ROUND_DURATION);
-    roundFillerStartRef.current = fillerCountLive;
+    
+    // Ensure accurate baseline
+    roundFillerStartRef.current = useRhetorStore.getState().currentMetrics?.fillerCount ?? 0;
     roundFillerWordsRef.current = [];
     transcriptAtRoundStartRef.current = lastTranscript || '';
-    prevFillerCountRef.current = fillerCountLive;
-
-    // Start the session metrics if first round
-    if (currentRound === 0) {
-      startSession();
-    }
+    prevFillerCountRef.current = roundFillerStartRef.current;
 
     timerRef.current = setInterval(() => {
       setTimer((prev) => {
@@ -286,68 +285,86 @@ export const ViewKillFillers: React.FC<ViewKillFillersProps> = ({ onExit }) => {
         return prev - 1;
       });
     }, 1000);
-  }, [fillerCountLive, lastTranscript, currentRound, startSession]);
+  }, [lastTranscript]); // Removed dangerous deps that might stale-closure
 
   /** Round ended — record result & ask AI for feedback */
   const endRound = useCallback(() => {
     if (timerRef.current) clearInterval(timerRef.current);
 
-    const roundFillers = fillerCountLive - roundFillerStartRef.current;
-    const result: RoundResult = {
-      round: currentRound + 1,
-      question: questions[currentRound],
-      fillerCount: roundFillers,
-      fillerWords: [...roundFillerWordsRef.current],
-      duration: ROUND_DURATION,
-    };
-    setResults((prev) => [...prev, result]);
+    // Get live values from store directly to avoid stale closures
+    const currentMetrics = useRhetorStore.getState().currentMetrics;
+    const currentTotal = currentMetrics?.fillerCount ?? 0;
+    const roundFillers = Math.max(0, currentTotal - roundFillerStartRef.current);
+    
+    // Use state setter form to ensure we have the latest round index
+    setCurrentRound(currRound => {
+      const result: RoundResult = {
+        round: currRound + 1,
+        question: questions[currRound],
+        fillerCount: roundFillers,
+        fillerWords: [...roundFillerWordsRef.current],
+        duration: ROUND_DURATION,
+      };
+      setResults((prev) => [...prev, result]);
 
-    // Ask AI for quick feedback
-    setPhase('ai-feedback');
+      // Ask AI for quick feedback
+      setPhase('ai-feedback');
 
-    const feedbackPrompt =
-      roundFillers === 0
-        ? `The student just answered Round ${currentRound + 1} of Kill the Fillers with ZERO filler words! Celebrate this. Say something like "Clean! Zero fillers — that was flawless!" Keep it to 1-2 sentences, energetic and encouraging.`
-        : `The student just finished Round ${currentRound + 1} of Kill the Fillers with ${roundFillers} filler word(s): ${roundFillerWordsRef.current.join(', ')}. Give quick, constructive feedback in 1-2 sentences. Example: "${roundFillers} fillers — try replacing '${roundFillerWordsRef.current[0] || 'um'}' with a confident pause." Be encouraging but specific.`;
+      const feedbackPrompt =
+        roundFillers === 0
+          ? `The student just answered Round ${currRound + 1} of Kill the Fillers with ZERO filler words! Say "Clean! Zero fillers!". Keep it brief.`
+          : `The student just finished Round ${currRound + 1} with ${roundFillers} filler word(s): ${roundFillerWordsRef.current.join(', ') || 'none detected'}. Give 1 sentence of constructive feedback.`;
 
-    setMode(AgentMode.COACH_LESSON, {
-      lessonId: 'kill-the-fillers',
-      lessonTitle: 'Kill the Fillers',
-      step: {
-        index: currentRound,
-        total: TOTAL_ROUNDS,
-        type: 'practice',
-        aiPrompt: feedbackPrompt,
-        expectedAction: 'listen',
-        duration: 10,
-      },
+      setMode(AgentMode.COACH_LESSON, {
+        lessonId: 'kill-the-fillers',
+        lessonTitle: 'Kill the Fillers',
+        step: {
+          index: currRound,
+          total: TOTAL_ROUNDS,
+          type: 'practice',
+          aiPrompt: feedbackPrompt,
+          expectedAction: 'listen',
+          duration: 10,
+        },
+      });
+      
+      return currRound; // return same value, update happens in advanceRound
     });
-  }, [fillerCountLive, currentRound, questions, setMode]);
+  }, [questions, setMode]);
 
   /** Move to next round or final scoreboard */
   const advanceRound = useCallback(() => {
-    if (currentRound + 1 >= TOTAL_ROUNDS) {
-      // Game over
-      endSession();
-      const totalFillers = results.reduce((sum, r) => sum + r.fillerCount, 0) +
-        (fillerCountLive - roundFillerStartRef.current); // include last round if not yet counted
-      const reward = getDrachmaReward(totalFillers);
-      addDrachmas(reward);
-      completeLesson('kill-the-fillers');
-      setDrachmaAwarded(reward);
-      setPhase('scoreboard');
-    } else {
-      setCurrentRound((r) => r + 1);
-      startRound();
-    }
-  }, [currentRound, results, fillerCountLive, endSession, addDrachmas, completeLesson, startRound]);
+    setCurrentRound(prevRound => {
+      const nextRound = prevRound + 1;
+      if (nextRound >= TOTAL_ROUNDS) {
+        // Game over
+        endSession();
+        // Calculate total from results + state
+        setResults(prevResults => {
+          const totalFillers = prevResults.reduce((sum, r) => sum + r.fillerCount, 0);
+          const reward = getDrachmaReward(totalFillers);
+          addDrachmas(reward);
+          completeLesson('kill-the-fillers');
+          setDrachmaAwarded(reward);
+          return prevResults;
+        });
+        setPhase('scoreboard');
+        return prevRound;
+      } else {
+        startRound(nextRound);
+        return nextRound;
+      }
+    });
+  }, [endSession, addDrachmas, completeLesson, startRound]);
 
   /** Start the game from intro */
   const handleStart = useCallback(() => {
-    setCurrentRound(0);
+    resetTranscript();
+    startSession(); // Initialize metrics
+    setCurrentRound(0); // Reset round to 0
     setResults([]);
-    startRound();
-  }, [startRound]);
+    startRound(0); // Start round 0 explicitly
+  }, [startRound, startSession, resetTranscript]);
 
   /** Auto-advance from AI feedback after a delay or when AI stops speaking */
   useEffect(() => {

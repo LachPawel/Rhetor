@@ -115,7 +115,7 @@ export function useRhetor(options: UseRhetorOptions): UseRhetorReturn {
   const addFillerEvent = useRhetorStore(s => s.addFillerEvent);
   
   // Filler detector hook
-  const { stats: fillerStats, lastFiller, processTranscript } = useFillerDetector();
+  const { stats: fillerStats, lastFiller, processTranscript, reset: resetFillerDetector } = useFillerDetector();
   
   // ============================================================================
   // INITIALIZATION
@@ -204,7 +204,7 @@ export function useRhetor(options: UseRhetorOptions): UseRhetorReturn {
 
         // Process for fillers
         if (enableFillerDetection) {
-          const detections = processTranscript(trimmed);
+          const detections = processTranscript(finalizedTranscriptRef.current);
           detections.forEach(d => addFillerEvent(d.word, d.position));
         }
 
@@ -358,8 +358,9 @@ export function useRhetor(options: UseRhetorOptions): UseRhetorReturn {
     finalizedAiTranscriptRef.current = '';
     setUserTranscript('');
     setAiTranscript('');
+    resetFillerDetector();
     console.log('[useRhetor] Transcript reset');
-  }, []);
+  }, [resetFillerDetector]);
 
   // ============================================================================
   // AUDIO RECORDING
