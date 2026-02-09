@@ -67,9 +67,8 @@ export const ViewAgora: React.FC<ViewAgoraProps> = ({ onSelectLesson }) => {
                     <div className="pl-6 space-y-4 border-l border-stone-200 ml-1.5">
                         {skills.map((skill, idx) => {
                             const isCompleted = user.completedLessons.includes(skill.id);
-                            // Lock if previous lesson in this pillar is not completed (sequential)
-                            // Or can implement global locking logic
-                            const isLocked = idx > 0 && !user.completedLessons.includes(skills[idx-1].id);
+                            // Only Kill the Fillers is unlocked — all others are locked
+                            const isLocked = skill.id !== 'kill-the-fillers';
 
                             return (
                                 <button 

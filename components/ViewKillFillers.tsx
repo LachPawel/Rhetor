@@ -34,6 +34,19 @@ import {
 const TOTAL_ROUNDS = 2;
 const ROUND_DURATION = 30; // seconds to answer
 const COUNTDOWN_BEFORE_ROUND = 3;
+const FEEDBACK_ADVANCE_DELAY = 6000; // Max ms to wait on feedback before auto-advancing
+
+/**
+ * Local filler word scanner — a simple backup that directly scans
+ * transcript text for common filler words, independent of the
+ * streaming FillerDetector pipeline.
+ */
+const LOCAL_FILLER_RE = /\b(um+|uh+|uhm+|er+m?|ah+|eh+|hm+|mhm|like|basically|actually|literally|obviously|essentially|totally|honestly|whatever|you know|i mean|kind of|kinda|sort of|sorta|i guess|i suppose)\b/gi;
+
+function countLocalFillers(text: string): { count: number; words: string[] } {
+  const matches = text.match(LOCAL_FILLER_RE) || [];
+  return { count: matches.length, words: matches.map(w => w.toLowerCase()) };
+}
 
 /** Pool of prompts the AI will ask — we pick randomly per round. */
 const QUESTION_PROMPTS = [
@@ -229,8 +242,87 @@ export const ViewKillFillers: React.FC<ViewKillFillersProps> = ({ onExit }) => {
   // GAME FLOW
   // ============================================================================
 
+  /** Round ended — record result & ask AI for feedback */
+  const endRound = useCallback(() => {
+    if (timerRef.current) clearInterval(timerRef.current);
+
+    // Get live values from store directly to avoid stale closures
+    const currentMetrics = useRhetorStore.getState().currentMetrics;
+    const storeFillers = Math.max(0, (currentMetrics?.fillerCount ?? 0) - roundFillerStartRef.current);
+
+    // Also run local regex scan on the transcript as a backup
+    const currentTranscript = useRhetorStore.getState().transcript || '';
+    const roundText = currentTranscript.slice(transcriptAtRoundStartRef.current.length);
+    const localScan = countLocalFillers(roundText);
+
+    // Use whichever found more fillers (store pipeline vs. local scan)
+    const roundFillers = Math.max(storeFillers, localScan.count);
+    const allWords = [...roundFillerWordsRef.current, ...localScan.words];
+    const uniqueWords = [...new Set(allWords)];
+    console.log('[KillFillers] Round end — store:', storeFillers, 'local:', localScan.count, 'words:', uniqueWords);
+    
+    // Use state setter form to ensure we have the latest round index
+    setCurrentRound(currRound => {
+      const result: RoundResult = {
+        round: currRound + 1,
+        question: questions[currRound],
+        fillerCount: roundFillers,
+        fillerWords: uniqueWords,
+        duration: ROUND_DURATION,
+      };
+      setResults((prev) => [...prev, result]);
+
+      // Ask AI for quick feedback
+      setPhase('ai-feedback');
+
+      const feedbackPrompt =
+        roundFillers === 0
+          ? `The student just answered Round ${currRound + 1} of Kill the Fillers with ZERO filler words! Say "Clean! Zero fillers!". Keep it brief.`
+          : `The student just finished Round ${currRound + 1} with ${roundFillers} filler word(s): ${uniqueWords.join(', ') || 'none detected'}. Give 1 sentence of constructive feedback.`;
+
+      setMode(AgentMode.COACH_LESSON, {
+        lessonId: 'kill-the-fillers',
+        lessonTitle: 'Kill the Fillers',
+        step: {
+          index: currRound,
+          total: TOTAL_ROUNDS,
+          type: 'practice',
+          aiPrompt: feedbackPrompt,
+          expectedAction: 'listen',
+          duration: 10,
+        },
+      });
+      
+      return currRound; // return same value, update happens in advanceRound
+    });
+  }, [questions, setMode]);
+
+  /** User is now speaking — start the timer + filler tracking */
+  const beginSpeaking = useCallback(() => {
+    setPhase('speaking');
+    setTimer(ROUND_DURATION);
+    
+    // Ensure accurate baseline from the store (not React state)
+    roundFillerStartRef.current = useRhetorStore.getState().currentMetrics?.fillerCount ?? 0;
+    roundFillerWordsRef.current = [];
+    transcriptAtRoundStartRef.current = useRhetorStore.getState().transcript || '';
+    prevFillerCountRef.current = roundFillerStartRef.current;
+
+    timerRef.current = setInterval(() => {
+      setTimer((prev) => {
+        if (prev <= 1) {
+          if (timerRef.current) clearInterval(timerRef.current);
+          endRound();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  }, [endRound]); // reads from store directly, no stale closures
+
   /** Start a round: show 3-2-1 countdown, then let user speak */
   const startRound = useCallback((roundIdx: number) => {
+    resetTranscript();
     setPhase('countdown');
     setCountdown(COUNTDOWN_BEFORE_ROUND);
     setLastFeedback(null);
@@ -262,75 +354,7 @@ export const ViewKillFillers: React.FC<ViewKillFillersProps> = ({ onExit }) => {
         return prev - 1;
       });
     }, 1000);
-  }, [questions, setMode]); // Removed currentRound dependency, passed as arg instead
-
-  /** User is now speaking — start the timer + filler tracking */
-  const beginSpeaking = useCallback(() => {
-    setPhase('speaking');
-    setTimer(ROUND_DURATION);
-    
-    // Ensure accurate baseline
-    roundFillerStartRef.current = useRhetorStore.getState().currentMetrics?.fillerCount ?? 0;
-    roundFillerWordsRef.current = [];
-    transcriptAtRoundStartRef.current = lastTranscript || '';
-    prevFillerCountRef.current = roundFillerStartRef.current;
-
-    timerRef.current = setInterval(() => {
-      setTimer((prev) => {
-        if (prev <= 1) {
-          if (timerRef.current) clearInterval(timerRef.current);
-          endRound();
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-  }, [lastTranscript]); // Removed dangerous deps that might stale-closure
-
-  /** Round ended — record result & ask AI for feedback */
-  const endRound = useCallback(() => {
-    if (timerRef.current) clearInterval(timerRef.current);
-
-    // Get live values from store directly to avoid stale closures
-    const currentMetrics = useRhetorStore.getState().currentMetrics;
-    const currentTotal = currentMetrics?.fillerCount ?? 0;
-    const roundFillers = Math.max(0, currentTotal - roundFillerStartRef.current);
-    
-    // Use state setter form to ensure we have the latest round index
-    setCurrentRound(currRound => {
-      const result: RoundResult = {
-        round: currRound + 1,
-        question: questions[currRound],
-        fillerCount: roundFillers,
-        fillerWords: [...roundFillerWordsRef.current],
-        duration: ROUND_DURATION,
-      };
-      setResults((prev) => [...prev, result]);
-
-      // Ask AI for quick feedback
-      setPhase('ai-feedback');
-
-      const feedbackPrompt =
-        roundFillers === 0
-          ? `The student just answered Round ${currRound + 1} of Kill the Fillers with ZERO filler words! Say "Clean! Zero fillers!". Keep it brief.`
-          : `The student just finished Round ${currRound + 1} with ${roundFillers} filler word(s): ${roundFillerWordsRef.current.join(', ') || 'none detected'}. Give 1 sentence of constructive feedback.`;
-
-      setMode(AgentMode.COACH_LESSON, {
-        lessonId: 'kill-the-fillers',
-        lessonTitle: 'Kill the Fillers',
-        step: {
-          index: currRound,
-          total: TOTAL_ROUNDS,
-          type: 'practice',
-          aiPrompt: feedbackPrompt,
-          expectedAction: 'listen',
-          duration: 10,
-        },
-      });
-      
-      return currRound; // return same value, update happens in advanceRound
-    });
-  }, [questions, setMode]);
+  }, [questions, setMode, resetTranscript, beginSpeaking]); // Removed currentRound dependency, passed as arg instead
 
   /** Move to next round or final scoreboard */
   const advanceRound = useCallback(() => {
@@ -366,15 +390,30 @@ export const ViewKillFillers: React.FC<ViewKillFillersProps> = ({ onExit }) => {
     startRound(0); // Start round 0 explicitly
   }, [startRound, startSession, resetTranscript]);
 
-  /** Auto-advance from AI feedback after a delay or when AI stops speaking */
+  /** Auto-advance from AI feedback — guaranteed fallback timer + optional early advance */
   useEffect(() => {
     if (phase !== 'ai-feedback') return;
-    // Wait for AI to finish speaking, then auto-advance after 2s
-    if (!aiIsSpeaking && lastFeedback) {
-      const timeout = setTimeout(advanceRound, 2500);
-      return () => clearTimeout(timeout);
+
+    // ALWAYS set a guaranteed fallback timer — even if AI feedback never arrives
+    const fallback = setTimeout(() => {
+      console.log('[KillFillers] Fallback timer fired — advancing round');
+      advanceRound();
+    }, FEEDBACK_ADVANCE_DELAY);
+
+    // If AI feedback arrived, we can advance sooner (after 2.5s reading time)
+    let early: ReturnType<typeof setTimeout> | null = null;
+    if (lastFeedback) {
+      early = setTimeout(() => {
+        console.log('[KillFillers] Early advance — feedback received');
+        advanceRound();
+      }, 2500);
     }
-  }, [phase, aiIsSpeaking, lastFeedback, advanceRound]);
+
+    return () => {
+      clearTimeout(fallback);
+      if (early) clearTimeout(early);
+    };
+  }, [phase, lastFeedback, advanceRound]);
 
   // ============================================================================
   // COMPUTED VALUES
@@ -619,12 +658,14 @@ export const ViewKillFillers: React.FC<ViewKillFillersProps> = ({ onExit }) => {
                 </motion.p>
               )}
 
-              <div className="flex items-center gap-2">
-                 <div className="w-2 h-2 bg-stone-800 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                 <div className="w-2 h-2 bg-stone-800 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                 <div className="w-2 h-2 bg-stone-800 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
-              </div>
-              <p className="text-xs text-stone-400 mt-4 uppercase tracking-widest">Next round starting...</p>
+              <button
+                onClick={advanceRound}
+                className="group flex items-center gap-3 px-6 py-3 bg-stone-900 text-stone-50 rounded-full text-sm uppercase tracking-widest hover:bg-stone-800 transition-all hover:scale-105 active:scale-95 shadow-lg shadow-stone-900/10"
+              >
+                Continue
+                <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
+              </button>
+              <p className="text-xs text-stone-400 mt-4 uppercase tracking-widest">or auto-advancing...</p>
             </motion.div>
           )}
 
