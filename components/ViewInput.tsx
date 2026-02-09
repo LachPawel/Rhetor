@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   ArrowLeft,
@@ -13,60 +13,28 @@ import {
   ChevronRight,
   Mic,
   Play,
+  Upload,
+  X,
 } from 'lucide-react';
 import { FadeTransition } from './FadeTransition.tsx';
 import { AppView } from '../types.ts';
 import { useRhetor } from '../contexts/RhetorContext.tsx';
 import { useRhetorStore } from '../stores/useRhetorStore.ts';
 import { PITCH_TEMPLATES, type PitchTemplate } from '../src/data/templates.ts';
+import {
+  createPitchDeckAsset,
+  DECK_FILE_ACCEPT,
+  disposePitchDeckAsset,
+  isPowerPointDeck,
+  isSupportedDeckFile,
+} from '../lib/pitch_deck.ts';
+import { extractTalkingPointsFromText, type GeneratedTalkingPoints } from '../lib/talking_points.ts';
 
 // ============================================================================
 // TYPES
 // ============================================================================
 
-type Tab = 'paste' | 'templates' | 'ai';
-
-interface GeneratedResult {
-  hook: string;
-  bullets: string[];
-  closing: string;
-  suggestedDuration: number;
-}
-
-// ============================================================================
-// GEMINI TEXT EXTRACTION
-// ============================================================================
-
-async function extractTalkingPoints(text: string): Promise<GeneratedResult> {
-  const apiKey =
-    (import.meta as any).env?.VITE_GEMINI_API_KEY ||
-    localStorage.getItem('rhetor_api_key') ||
-    '';
-
-  if (!apiKey) throw new Error('No API key found');
-
-  const { GoogleGenAI } = await import('@google/genai');
-  const ai = new GoogleGenAI({ apiKey });
-
-  const response = await ai.models.generateContent({
-    model: 'gemini-2.5-flash',
-    contents: [
-      {
-        role: 'user',
-        parts: [
-          {
-            text: `Extract 3-6 key talking points from this text. Return ONLY valid JSON with no markdown fencing:\n{"hook": "one compelling opening sentence", "bullets": ["short talking point 5-10 words each"], "closing": "one strong closing sentence", "suggestedDuration": <number in seconds>}\n\nText:\n${text}`,
-          },
-        ],
-      },
-    ],
-  });
-
-  const raw = (response as any).text ?? '';
-  // Strip possible markdown code fences
-  const cleaned = raw.replace(/```json\s*/gi, '').replace(/```\s*/gi, '').trim();
-  return JSON.parse(cleaned) as GeneratedResult;
-}
+type Tab = 'paste' | 'templates' | 'deck' | 'ai';
 
 // ============================================================================
 // SUB-COMPONENTS
@@ -227,6 +195,8 @@ export const ViewInput: React.FC<ViewInputProps> = ({ onChangeView }) => {
   const [pastedText, setPastedText] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [generateError, setGenerateError] = useState<string | null>(null);
+  const [deckError, setDeckError] = useState<string | null>(null);
+  const [isDeckUploading, setIsDeckUploading] = useState(false);
 
   // Editable state
   const [hook, setHook] = useState('');
@@ -236,17 +206,24 @@ export const ViewInput: React.FC<ViewInputProps> = ({ onChangeView }) => {
   const [hasContent, setHasContent] = useState(false);
 
   // Store
+  const storedTalkingPoints = useRhetorStore((s) => s.talkingPoints);
+  const storedPitchHook = useRhetorStore((s) => s.pitchHook);
+  const storedPitchClosing = useRhetorStore((s) => s.pitchClosing);
+  const storedDuration = useRhetorStore((s) => s.suggestedDuration);
   const setTalkingPoints = useRhetorStore((s) => s.setTalkingPoints);
   const setPitchHook = useRhetorStore((s) => s.setPitchHook);
   const setPitchClosing = useRhetorStore((s) => s.setPitchClosing);
   const setSuggestedDuration = useRhetorStore((s) => s.setSuggestedDuration);
+  const pitchDeck = useRhetorStore((s) => s.pitchDeck);
+  const setPitchDeck = useRhetorStore((s) => s.setPitchDeck);
+  const clearPitchDeck = useRhetorStore((s) => s.clearPitchDeck);
 
   // --------------------------------------------------------------------------
   // HANDLERS
   // --------------------------------------------------------------------------
 
   const applyResult = useCallback(
-    (result: { hook: string; bullets: string[]; closing: string; suggestedDuration: number }) => {
+    (result: GeneratedTalkingPoints) => {
       setHook(result.hook);
       setBullets(result.bullets);
       setClosing(result.closing);
@@ -261,7 +238,7 @@ export const ViewInput: React.FC<ViewInputProps> = ({ onChangeView }) => {
     setIsGenerating(true);
     setGenerateError(null);
     try {
-      const result = await extractTalkingPoints(pastedText);
+      const result = await extractTalkingPointsFromText(pastedText);
       applyResult(result);
     } catch (err: any) {
       console.error('[ViewInput] generation error', err);
@@ -286,6 +263,51 @@ export const ViewInput: React.FC<ViewInputProps> = ({ onChangeView }) => {
 
   const { connect, isConnected } = useRhetor();
 
+  const handleDeckFileChange = useCallback(
+    async (event: React.ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0];
+      event.target.value = '';
+      if (!file) return;
+
+      if (!isSupportedDeckFile(file)) {
+        setDeckError('Please upload a PDF, PowerPoint, or image file.');
+        return;
+      }
+
+      setDeckError(null);
+      setIsDeckUploading(true);
+      try {
+        const nextDeck = await createPitchDeckAsset(file);
+        disposePitchDeckAsset(pitchDeck);
+        setPitchDeck(nextDeck);
+
+        if (nextDeck.extractedText?.trim() && !hasContent) {
+          try {
+            const extracted = await extractTalkingPointsFromText(nextDeck.extractedText);
+            applyResult(extracted);
+            setActiveTab('paste');
+          } catch (extractError) {
+            console.warn('[ViewInput] auto-extract from deck failed', extractError);
+            setPastedText((prev) => prev || nextDeck.extractedText || '');
+            setActiveTab('paste');
+          }
+        }
+      } catch (error) {
+        console.error('[ViewInput] deck upload failed', error);
+        setDeckError('Could not load this file. Try another PDF, PowerPoint, or image.');
+      } finally {
+        setIsDeckUploading(false);
+      }
+    },
+    [pitchDeck, setPitchDeck, hasContent, applyResult],
+  );
+
+  const handleRemoveDeck = useCallback(() => {
+    disposePitchDeckAsset(pitchDeck);
+    clearPitchDeck();
+    setDeckError(null);
+  }, [pitchDeck, clearPitchDeck]);
+
   const handleStartPractice = useCallback(async () => {
     // Save to store
     setTalkingPoints(bullets);
@@ -298,6 +320,22 @@ export const ViewInput: React.FC<ViewInputProps> = ({ onChangeView }) => {
 
     onChangeView(AppView.PRACTICE);
   }, [bullets, hook, closing, duration, setTalkingPoints, setPitchHook, setPitchClosing, setSuggestedDuration, onChangeView, connect, isConnected]);
+
+  useEffect(() => {
+    if (!hasContent && (storedTalkingPoints.length > 0 || storedPitchHook || storedPitchClosing)) {
+      setHook(storedPitchHook);
+      setBullets(storedTalkingPoints);
+      setClosing(storedPitchClosing);
+      setDuration(storedDuration > 0 ? storedDuration : 60);
+      setHasContent(true);
+    }
+  }, [hasContent, storedTalkingPoints, storedPitchHook, storedPitchClosing, storedDuration]);
+
+  useEffect(() => {
+    if (!pastedText && pitchDeck?.extractedText) {
+      setPastedText(pitchDeck.extractedText);
+    }
+  }, [pastedText, pitchDeck]);
 
   // --------------------------------------------------------------------------
   // RENDER
@@ -332,6 +370,12 @@ export const ViewInput: React.FC<ViewInputProps> = ({ onChangeView }) => {
           icon={LayoutTemplate}
           label="Templates"
           onClick={() => setActiveTab('templates')}
+        />
+        <TabButton
+          active={activeTab === 'deck'}
+          icon={Upload}
+          label="Presentation"
+          onClick={() => setActiveTab('deck')}
         />
         <TabButton
           active={activeTab === 'ai'}
@@ -458,6 +502,57 @@ export const ViewInput: React.FC<ViewInputProps> = ({ onChangeView }) => {
                     </select>
                   </div>
 
+                  {/* Deck Upload */}
+                  <div className="rounded-lg border border-stone-200 bg-white p-4 space-y-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-xs font-medium text-stone-500 uppercase tracking-widest">
+                          Pitch Deck (Optional)
+                        </p>
+                        <p className="text-xs text-stone-400 mt-1">
+                          Add a PDF, PPT/PPTX, or image to reference during practice.
+                        </p>
+                      </div>
+                      <label className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-stone-900 text-white text-xs font-medium cursor-pointer hover:bg-stone-800 transition-colors">
+                        <Upload className="w-3.5 h-3.5" />
+                        {isDeckUploading ? 'Loading...' : pitchDeck ? 'Replace Deck' : 'Upload Deck'}
+                        <input
+                          type="file"
+                          accept={DECK_FILE_ACCEPT}
+                          onChange={handleDeckFileChange}
+                          className="hidden"
+                          disabled={isDeckUploading}
+                        />
+                      </label>
+                    </div>
+
+                    {pitchDeck && (
+                      <div className="flex items-center justify-between gap-3 rounded-md border border-stone-200 bg-stone-50 px-3 py-2">
+                        <div className="min-w-0">
+                          <p className="text-sm text-stone-700 truncate">{pitchDeck.fileName}</p>
+                          <p className="text-[11px] text-stone-400">
+                            {pitchDeck.totalSlides
+                              ? `${pitchDeck.totalSlides} slide${pitchDeck.totalSlides === 1 ? '' : 's'}`
+                              : isPowerPointDeck(pitchDeck)
+                                ? pitchDeck.slideTexts?.length
+                                  ? `${pitchDeck.slideTexts.length} slide${pitchDeck.slideTexts.length === 1 ? '' : 's'} parsed from PPTX`
+                                  : 'PowerPoint attached'
+                                : 'Slide count detected during practice'}
+                          </p>
+                        </div>
+                        <button
+                          onClick={handleRemoveDeck}
+                          className="p-1.5 text-stone-400 hover:text-rose-600 transition-colors"
+                          title="Remove deck"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    )}
+
+                    {deckError && <p className="text-xs text-rose-600">{deckError}</p>}
+                  </div>
+
                   {/* Reset link */}
                   <button
                     onClick={() => {
@@ -466,6 +561,7 @@ export const ViewInput: React.FC<ViewInputProps> = ({ onChangeView }) => {
                       setBullets([]);
                       setClosing('');
                       setPastedText('');
+                      handleRemoveDeck();
                     }}
                     className="text-xs text-stone-400 hover:text-stone-600 uppercase tracking-widest"
                   >
@@ -494,6 +590,85 @@ export const ViewInput: React.FC<ViewInputProps> = ({ onChangeView }) => {
               {PITCH_TEMPLATES.map((t) => (
                 <TemplateCard key={t.id} template={t} onSelect={handleTemplateSelect} />
               ))}
+            </motion.div>
+          )}
+
+          {/* ============================================================= */}
+          {/* PRESENTATION TAB                                              */}
+          {/* ============================================================= */}
+          {activeTab === 'deck' && (
+            <motion.div
+              key="deck"
+              initial={{ opacity: 0, x: -10 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 10 }}
+              transition={{ duration: 0.2 }}
+              className="space-y-4"
+            >
+              <div className="rounded-lg border border-stone-200 bg-white p-5 space-y-4">
+                <div>
+                  <p className="text-xs font-medium text-stone-500 uppercase tracking-widest">
+                    Start From Presentation
+                  </p>
+                  <p className="text-sm text-stone-500 mt-2">
+                    Upload a PPTX to parse slide text, preview it in practice, and auto-generate talking points.
+                  </p>
+                </div>
+
+                <label className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-stone-900 text-white text-sm font-medium cursor-pointer hover:bg-stone-800 transition-colors">
+                  <Upload className="w-4 h-4" />
+                  {isDeckUploading ? 'Processing...' : pitchDeck ? 'Replace Deck' : 'Upload Deck'}
+                  <input
+                    type="file"
+                    accept={DECK_FILE_ACCEPT}
+                    onChange={handleDeckFileChange}
+                    className="hidden"
+                    disabled={isDeckUploading}
+                  />
+                </label>
+
+                {pitchDeck && (
+                  <div className="rounded-md border border-stone-200 bg-stone-50 px-3 py-3 space-y-2">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-sm text-stone-700 truncate">{pitchDeck.fileName}</p>
+                        <p className="text-[11px] text-stone-400">
+                            {pitchDeck.totalSlides
+                              ? `${pitchDeck.totalSlides} slide${pitchDeck.totalSlides === 1 ? '' : 's'}`
+                              : isPowerPointDeck(pitchDeck)
+                                ? pitchDeck.slideHtml?.length
+                                  ? `${pitchDeck.slideHtml.length} slide${pitchDeck.slideHtml.length === 1 ? '' : 's'} ready for preview`
+                                  : pitchDeck.slideTexts?.length
+                                    ? `${pitchDeck.slideTexts.length} slide${pitchDeck.slideTexts.length === 1 ? '' : 's'} parsed from PPTX`
+                                    : 'PowerPoint attached'
+                                : 'Deck attached'}
+                        </p>
+                      </div>
+                      <button
+                        onClick={handleRemoveDeck}
+                        className="p-1.5 text-stone-400 hover:text-rose-600 transition-colors"
+                        title="Remove deck"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+
+                    {pitchDeck.extractedText && (
+                      <p className="text-xs text-stone-500 line-clamp-4 whitespace-pre-wrap">
+                        {pitchDeck.extractedText}
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {!hasContent && (
+                  <p className="text-xs text-stone-400">
+                    After upload, we auto-generate talking points from the deck text and open them in Paste Content.
+                  </p>
+                )}
+
+                {deckError && <p className="text-xs text-rose-600">{deckError}</p>}
+              </div>
             </motion.div>
           )}
 

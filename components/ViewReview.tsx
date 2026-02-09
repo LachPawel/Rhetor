@@ -3,7 +3,8 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { FadeTransition } from './FadeTransition.tsx';
 import { Home, RotateCcw, Check, X } from 'lucide-react';
 import { useRhetorStore } from '../stores/useRhetorStore.ts';
-import type { SessionRecord } from '../stores/useRhetorStore.ts';
+import type { DeckNavigationEvent, SessionRecord } from '../stores/useRhetorStore.ts';
+import type { SessionResult } from '../types.ts';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -42,6 +43,59 @@ const isCovered = (point: string, transcriptTokens: Set<string>): boolean => {
   return hits / pointTokens.length >= 0.5;
 };
 
+interface DeckAnalysis {
+  fileName: string;
+  totalSlides: number | null;
+  slidesVisited: number;
+  slideChanges: number;
+  averageSecondsPerSlide: number;
+  mostTimeSlide: { slideNumber: number; seconds: number } | null;
+}
+
+const analyzeDeckNavigation = (
+  fileName: string,
+  totalSlides: number | null,
+  events: DeckNavigationEvent[],
+  sessionStart: number,
+  sessionEnd: number,
+): DeckAnalysis | null => {
+  if (events.length === 0 || sessionEnd <= sessionStart) return null;
+
+  const orderedEvents = [...events].sort((a, b) => a.timestamp - b.timestamp);
+  const timeBySlide = new Map<number, number>();
+
+  orderedEvents.forEach((evt, index) => {
+    const start = Math.max(sessionStart, evt.timestamp);
+    const nextTimestamp = orderedEvents[index + 1]?.timestamp ?? sessionEnd;
+    const end = Math.min(sessionEnd, nextTimestamp);
+    if (end <= start) return;
+    const elapsed = end - start;
+    timeBySlide.set(evt.slideNumber, (timeBySlide.get(evt.slideNumber) ?? 0) + elapsed);
+  });
+
+  const entries = [...timeBySlide.entries()];
+  const totalTrackedMs = entries.reduce((sum, [, ms]) => sum + ms, 0);
+  const mostTimeEntry = entries.reduce<[number, number] | null>((best, current) => {
+    if (!best || current[1] > best[1]) return current;
+    return best;
+  }, null);
+
+  return {
+    fileName,
+    totalSlides,
+    slidesVisited: new Set(orderedEvents.map((evt) => evt.slideNumber)).size,
+    slideChanges: Math.max(0, orderedEvents.length - 1),
+    averageSecondsPerSlide:
+      entries.length > 0 ? Math.round((totalTrackedMs / entries.length) / 100) / 10 : 0,
+    mostTimeSlide: mostTimeEntry
+      ? {
+          slideNumber: mostTimeEntry[0],
+          seconds: Math.round(mostTimeEntry[1] / 100) / 10,
+        }
+      : null,
+  };
+};
+
 // ---------------------------------------------------------------------------
 // Coach Debrief via Gemini 2.5 Flash REST API
 // ---------------------------------------------------------------------------
@@ -55,6 +109,7 @@ async function generateCoachDebrief(opts: {
   fillerBreakdown: [string, number][];
   durationSeconds: number;
   wordsSpoken: number;
+  deckAnalysis: DeckAnalysis | null;
 }): Promise<string> {
   const apiKey =
     (import.meta as any).env?.VITE_GEMINI_API_KEY ||
@@ -72,6 +127,18 @@ async function generateCoachDebrief(opts: {
   const pointsList = opts.talkingPoints
     .map((pt, i) => `  ${i + 1}. ${pt}`)
     .join('\n');
+
+  const deckSummary = opts.deckAnalysis
+    ? `\n- Deck: ${opts.deckAnalysis.fileName}
+- Slides viewed: ${opts.deckAnalysis.slidesVisited}${opts.deckAnalysis.totalSlides ? `/${opts.deckAnalysis.totalSlides}` : ''}
+- Slide changes: ${opts.deckAnalysis.slideChanges}
+- Avg time per slide: ${opts.deckAnalysis.averageSecondsPerSlide.toFixed(1)}s
+- Longest hold: ${
+        opts.deckAnalysis.mostTimeSlide
+          ? `slide ${opts.deckAnalysis.mostTimeSlide.slideNumber} (${opts.deckAnalysis.mostTimeSlide.seconds.toFixed(1)}s)`
+          : 'n/a'
+      }`
+    : '\n- Deck: none';
 
   const prompt = `You are ZEUS — an inspiring Greek-mythology-themed speech coach.
 Give a concise, personal debrief of the user's practice session (3-5 sentences max).
@@ -92,6 +159,7 @@ SESSION DATA:
 - Filler words: ${opts.fillerCount} total (${fillerSummary})
 - Talking points (${opts.coveredCount}/${opts.talkingPoints.length} covered):
 ${pointsList}
+${deckSummary}
 
 USER TRANSCRIPT (what they actually said):
 """
@@ -120,6 +188,7 @@ Write the debrief now:`;
 // ---------------------------------------------------------------------------
 
 interface ViewReviewProps {
+  result?: SessionResult | null;
   onReset: () => void;
   onPracticeAgain?: () => void;
 }
@@ -129,6 +198,8 @@ export const ViewReview: React.FC<ViewReviewProps> = ({ onReset, onPracticeAgain
   const metrics = useRhetorStore((s) => s.currentMetrics);
   const transcript = useRhetorStore((s) => s.transcript);
   const talkingPoints = useRhetorStore((s) => s.talkingPoints);
+  const pitchDeck = useRhetorStore((s) => s.pitchDeck);
+  const deckNavigationEvents = useRhetorStore((s) => s.deckNavigationEvents);
 
   // ---- Derived values ------------------------------------------------------
   const duration = metrics ? (metrics.endTime ?? Date.now()) - metrics.startTime : 0;
@@ -154,6 +225,17 @@ export const ViewReview: React.FC<ViewReviewProps> = ({ onReset, onPracticeAgain
     [talkingPoints, transcriptTokens],
   );
   const coveredCount = pointsCoverage.filter((p) => p.covered).length;
+
+  const deckAnalysis = useMemo(() => {
+    if (!metrics || !pitchDeck) return null;
+    return analyzeDeckNavigation(
+      pitchDeck.fileName,
+      pitchDeck.totalSlides,
+      deckNavigationEvents,
+      metrics.startTime,
+      metrics.endTime ?? Date.now(),
+    );
+  }, [metrics, pitchDeck, deckNavigationEvents]);
 
   // ---- Save session record to history (once) ----------------------------
   const addSessionToHistory = useRhetorStore((s) => s.addSessionToHistory);
@@ -204,6 +286,7 @@ export const ViewReview: React.FC<ViewReviewProps> = ({ onReset, onPracticeAgain
       fillerBreakdown,
       durationSeconds: Math.round(dur / 1000),
       wordsSpoken,
+      deckAnalysis,
     }).then(setDebriefText);
   }, [metrics]); // intentionally minimal deps — runs once
 
@@ -316,6 +399,47 @@ export const ViewReview: React.FC<ViewReviewProps> = ({ onReset, onPracticeAgain
               </li>
             ))}
           </ul>
+        </div>
+      )}
+
+      {/* ── Deck Analysis ─────────────────────────────────────────────── */}
+      {deckAnalysis && (
+        <div className="mb-6 w-full">
+          <div className="flex items-baseline justify-between mb-3 gap-3">
+            <div className="text-stone-400 text-xs tracking-widest uppercase">Deck Delivery</div>
+            <div className="text-xs font-mono text-stone-500 truncate">{deckAnalysis.fileName}</div>
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3">
+            <div className="bg-white border border-stone-200 rounded-lg p-3 text-center">
+              <div className="text-xl font-mono font-bold text-stone-900">
+                {deckAnalysis.slidesVisited}
+                {deckAnalysis.totalSlides ? `/${deckAnalysis.totalSlides}` : ''}
+              </div>
+              <div className="text-[11px] text-stone-500 mt-1 uppercase tracking-wide">Slides Viewed</div>
+            </div>
+            <div className="bg-white border border-stone-200 rounded-lg p-3 text-center">
+              <div className="text-xl font-mono font-bold text-stone-900">{deckAnalysis.slideChanges}</div>
+              <div className="text-[11px] text-stone-500 mt-1 uppercase tracking-wide">Slide Changes</div>
+            </div>
+            <div className="bg-white border border-stone-200 rounded-lg p-3 text-center">
+              <div className="text-xl font-mono font-bold text-stone-900">{deckAnalysis.averageSecondsPerSlide.toFixed(1)}s</div>
+              <div className="text-[11px] text-stone-500 mt-1 uppercase tracking-wide">Avg / Slide</div>
+            </div>
+            <div className="bg-white border border-stone-200 rounded-lg p-3 text-center">
+              <div className="text-xl font-mono font-bold text-stone-900">
+                {deckAnalysis.mostTimeSlide ? `#${deckAnalysis.mostTimeSlide.slideNumber}` : '—'}
+              </div>
+              <div className="text-[11px] text-stone-500 mt-1 uppercase tracking-wide">Longest Hold</div>
+            </div>
+          </div>
+
+          {deckAnalysis.mostTimeSlide && (
+            <p className="text-sm text-stone-600">
+              You spent the most time on slide {deckAnalysis.mostTimeSlide.slideNumber}
+              {' '}({deckAnalysis.mostTimeSlide.seconds.toFixed(1)}s).
+            </p>
+          )}
         </div>
       )}
 

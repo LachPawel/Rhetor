@@ -99,7 +99,7 @@ Tools: show_feedback (only)
 MODE: coach_practice
 ═══════════════════════════════════════════════════════════════
 Trigger: user is in a live Practice session.
-Context JSON contains: { talkingPoints[], pitchTopic, metrics: { fillerCount, wpm, duration } }
+Context JSON contains: { talkingPoints[], pitchTopic, metrics: { fillerCount, wpm, duration }, pitchDeck? }
 
 Behavior:
 - You are a live delivery coach watching a speech.
@@ -126,6 +126,9 @@ Behavior:
   "Strong delivery — your hook really landed." or
   "Good energy. Watch the pace in the middle section."
 - Track which talking points the user covered by listening for key concepts.
+- If a pitchDeck is present, coach slide pacing lightly:
+  • Praise clear transitions between slides.
+  • If the user lingers too long on one slide, prompt a move on.
 
 Tools: show_feedback (filler_alert, pace_alert, positive), award_drachmas, advance_teleprompter
 
@@ -281,6 +284,12 @@ export interface SessionMetrics {
   talkingPoints?: string[];
 }
 
+export interface PracticeDeckContext {
+  fileName: string;
+  totalSlides: number | null;
+  currentSlide: number;
+}
+
 export function buildWelcomerContext(user: UserContext): string {
   return JSON.stringify({
     mode: 'welcomer',
@@ -330,7 +339,8 @@ export function buildPracticeContext(
   user: UserContext,
   talkingPoints: string[],
   pitchTopic: string,
-  metrics?: Partial<SessionMetrics>
+  metrics?: Partial<SessionMetrics>,
+  pitchDeck?: PracticeDeckContext
 ): string {
   return JSON.stringify({
     mode: 'coach_practice',
@@ -338,6 +348,7 @@ export function buildPracticeContext(
     talkingPoints,
     pitchTopic,
     ...(metrics && { metrics }),
+    ...(pitchDeck && { pitchDeck }),
   });
 }
 

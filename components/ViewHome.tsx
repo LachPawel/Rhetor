@@ -1,38 +1,29 @@
 
 import React, { useEffect } from 'react';
 import { FadeTransition } from './FadeTransition.tsx';
-import { AppView, AgentMode } from '../types.ts';
+import { AppView } from '../types.ts';
 import { useRhetor } from '../contexts/RhetorContext.tsx';
-import { Target, Wind, PenTool, Mic, Users, Flame, Coins } from 'lucide-react';
-import { useRhetorStore } from '../stores/useRhetorStore';
+import { Target, Wind, PenTool, Zap, Users, Flame, Coins, Mic } from 'lucide-react';
 
 interface ViewHomeProps {
   onChangeView: (view: AppView) => void;
 }
 
 export const ViewHome: React.FC<ViewHomeProps> = ({ onChangeView }) => {
-  const { connect, isConnected, isConnecting, setMode, user, talkingPoints } = useRhetor();
+  const { connect, disconnect, isConnected, user } = useRhetor();
 
   useEffect(() => {
+    // Home should be a quiet screen with no live AI mic/session.
+    // Dedicated experiences (warmup/practice/simulation) reconnect as needed.
     if (isConnected) {
-        setMode(AgentMode.WELCOMER);
+      disconnect();
     }
-  }, [isConnected]);
+  }, [isConnected, disconnect]);
 
   // Connect before warm up action
   const handleWarmUp = async () => {
     if (!isConnected) await connect();
     onChangeView(AppView.WARMUP);
-  };
-  
-  // Connect before practice — redirect to INPUT if no talking points
-  const handlePractice = async () => {
-    if (!isConnected) await connect();
-    if (!talkingPoints || talkingPoints.length === 0) {
-      onChangeView(AppView.INPUT);
-    } else {
-      onChangeView(AppView.PRACTICE);
-    }
   };
 
   // Connect before simulation
@@ -43,7 +34,6 @@ export const ViewHome: React.FC<ViewHomeProps> = ({ onChangeView }) => {
 
   return (
     <FadeTransition className="flex flex-col min-h-screen pb-20 bg-stone-50 text-stone-900">
-      
       <div className="px-6 pt-12 flex-1 flex flex-col justify-start gap-8">
         
         {/* Header */}
@@ -87,21 +77,21 @@ export const ViewHome: React.FC<ViewHomeProps> = ({ onChangeView }) => {
 
             <button onClick={() => onChangeView(AppView.INPUT)} className="p-4 bg-white/60 backdrop-blur-md border border-stone-200 rounded-lg shadow-sm hover:border-stone-400 hover:bg-white/80 transition-all text-left flex flex-col justify-between h-32">
                 <div className="w-8 h-8 rounded-full bg-stone-100 flex items-center justify-center">
-                    <PenTool className="w-4 h-4 text-stone-600" />
-                </div>
-                <div>
-                    <h4 className="font-serif text-lg leading-none mb-1">Prepare</h4>
-                    <p className="text-xs text-stone-500">Build content</p>
-                </div>
-            </button>
-
-            <button onClick={handlePractice} className="p-4 bg-white/60 backdrop-blur-md border border-stone-200 rounded-lg shadow-sm hover:border-stone-400 hover:bg-white/80 transition-all text-left flex flex-col justify-between h-32">
-                <div className="w-8 h-8 rounded-full bg-stone-100 flex items-center justify-center">
                     <Mic className="w-4 h-4 text-stone-600" />
                 </div>
                 <div>
                     <h4 className="font-serif text-lg leading-none mb-1">Practice</h4>
                     <p className="text-xs text-stone-500">Deliver your talk</p>
+                </div>
+            </button>
+
+            <button onClick={() => onChangeView(AppView.KILL_FILLERS)} className="p-4 bg-white/60 backdrop-blur-md border border-stone-200 rounded-lg shadow-sm hover:border-stone-400 hover:bg-white/80 transition-all text-left flex flex-col justify-between h-32">
+                <div className="w-8 h-8 rounded-full bg-stone-100 flex items-center justify-center">
+                    <Zap className="w-4 h-4 text-stone-600" />
+                </div>
+                <div>
+                    <h4 className="font-serif text-lg leading-none mb-1">Filler Killer</h4>
+                    <p className="text-xs text-stone-500">Eliminate um's & uh's</p>
                 </div>
             </button>
 

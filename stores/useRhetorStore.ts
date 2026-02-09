@@ -61,6 +61,22 @@ export interface SessionRecord {
   bulletsCovered: number;
 }
 
+export interface PitchDeckAsset {
+  fileName: string;
+  mimeType: string;
+  objectUrl: string;
+  totalSlides: number | null;
+  uploadedAt: number;
+  slideTexts?: string[];
+  slideHtml?: string[];
+  extractedText?: string;
+}
+
+export interface DeckNavigationEvent {
+  slideNumber: number;
+  timestamp: number;
+}
+
 export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'reconnecting' | 'error' | 'closed';
 
 export type AIMode = 'welcomer' | 'coach_lesson' | 'coach_warmup' | 'coach_practice' | 'interviewer' | 'analyst' | 'content_builder' | 'idle';
@@ -155,6 +171,9 @@ interface PitchSlice {
   pitchHook: string;
   pitchClosing: string;
   suggestedDuration: number;
+  pitchDeck: PitchDeckAsset | null;
+  currentDeckSlide: number;
+  deckNavigationEvents: DeckNavigationEvent[];
   
   // Actions
   setTalkingPoints: (points: string[]) => void;
@@ -162,6 +181,11 @@ interface PitchSlice {
   setPitchHook: (hook: string) => void;
   setPitchClosing: (closing: string) => void;
   setSuggestedDuration: (duration: number) => void;
+  setPitchDeck: (deck: PitchDeckAsset) => void;
+  clearPitchDeck: () => void;
+  setCurrentDeckSlide: (slideNumber: number) => void;
+  resetDeckNavigationEvents: () => void;
+  clearPitch: () => void;
 }
 
 interface UISlice {
@@ -470,14 +494,22 @@ export const useRhetorStore = create<RhetorStore>()(
 
       startSession: () => {
         set((state) => {
+          const now = Date.now();
           state.isSessionActive = true;
           state.currentMetrics = {
             ...INITIAL_METRICS,
-            startTime: Date.now(),
+            startTime: now,
           };
           state.transcript = '';
           state.lastFillerTimestamp = null;
           state.recentFillerWord = null;
+          state.deckNavigationEvents = [];
+          if (state.pitchDeck) {
+            state.deckNavigationEvents.push({
+              slideNumber: state.currentDeckSlide,
+              timestamp: now,
+            });
+          }
         });
       },
 
@@ -553,6 +585,7 @@ export const useRhetorStore = create<RhetorStore>()(
           state.transcript = '';
           state.lastFillerTimestamp = null;
           state.recentFillerWord = null;
+          state.deckNavigationEvents = [];
         });
       },
 
@@ -634,10 +667,15 @@ export const useRhetorStore = create<RhetorStore>()(
       pitchHook: '',
       pitchClosing: '',
       suggestedDuration: 60,
+      pitchDeck: null,
+      currentDeckSlide: 1,
+      deckNavigationEvents: [],
 
       setTalkingPoints: (points: string[]) => {
         set((state) => {
-          state.talkingPoints = points;
+          state.talkingPoints = points
+            .map((point) => point.trim())
+            .filter((point) => point.length > 0);
         });
       },
 
@@ -662,6 +700,69 @@ export const useRhetorStore = create<RhetorStore>()(
       setSuggestedDuration: (duration: number) => {
         set((state) => {
           state.suggestedDuration = duration;
+        });
+      },
+
+      setPitchDeck: (deck: PitchDeckAsset) => {
+        set((state) => {
+          state.pitchDeck = deck;
+          state.currentDeckSlide = 1;
+          state.deckNavigationEvents = [];
+          if (state.isSessionActive) {
+            state.deckNavigationEvents.push({
+              slideNumber: 1,
+              timestamp: Date.now(),
+            });
+          }
+        });
+      },
+
+      clearPitchDeck: () => {
+        set((state) => {
+          state.pitchDeck = null;
+          state.currentDeckSlide = 1;
+          state.deckNavigationEvents = [];
+        });
+      },
+
+      setCurrentDeckSlide: (slideNumber: number) => {
+        set((state) => {
+          if (!state.pitchDeck) return;
+          const maxSlides = state.pitchDeck.totalSlides ?? Number.POSITIVE_INFINITY;
+          const nextSlide = Math.max(1, Math.min(slideNumber, maxSlides));
+          if (nextSlide === state.currentDeckSlide) return;
+          state.currentDeckSlide = nextSlide;
+          if (state.isSessionActive) {
+            state.deckNavigationEvents.push({
+              slideNumber: nextSlide,
+              timestamp: Date.now(),
+            });
+          }
+        });
+      },
+
+      resetDeckNavigationEvents: () => {
+        set((state) => {
+          state.deckNavigationEvents = [];
+          if (state.isSessionActive && state.pitchDeck) {
+            state.deckNavigationEvents.push({
+              slideNumber: state.currentDeckSlide,
+              timestamp: Date.now(),
+            });
+          }
+        });
+      },
+
+      clearPitch: () => {
+        set((state) => {
+          state.talkingPoints = [];
+          state.pitchTopic = '';
+          state.pitchHook = '';
+          state.pitchClosing = '';
+          state.suggestedDuration = 60;
+          state.pitchDeck = null;
+          state.currentDeckSlide = 1;
+          state.deckNavigationEvents = [];
         });
       },
 
