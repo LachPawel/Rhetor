@@ -95,10 +95,10 @@ export const ViewAgora: React.FC<ViewAgoraProps> = ({ onSelectLesson }) => {
                                     </div>
                                     
                                     <div className="shrink-0">
-                                        {isCompleted ? (
-                                            <CheckCircle className="w-6 h-6 text-stone-900" />
-                                        ) : isLocked ? (
+                                        {isLocked ? (
                                             <Lock className="w-5 h-5 text-stone-300" />
+                                        ) : isCompleted ? (
+                                            <CheckCircle className="w-6 h-6 text-stone-900" />
                                         ) : (
                                             <div className="w-8 h-8 rounded-full bg-stone-900 text-white flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
                                                 <Play className="w-3 h-3 ml-0.5" />
