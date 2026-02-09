@@ -1,9 +1,9 @@
 /**
  * ViewKillFillers — "Kill the Fillers" Interactive Game
  *
- * A 5-round game where the AI asks random questions and the user
- * must answer for 15-20 seconds WITHOUT filler words.
- * Real-time filler detection with red flash, buzzer visual, and scoring.
+ * A 2-round game where the AI asks random questions and the user
+ * must answer for 30 seconds WITHOUT filler words.
+ * Real-time filler detection with visual feedback and scoring.
  */
 
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
@@ -20,16 +20,16 @@ import {
   Coins,
   ChevronRight,
   Shield,
-  Volume2,
   Mic,
+  Sparkles,
 } from 'lucide-react';
 
 // ============================================================================
 // CONSTANTS
 // ============================================================================
 
-const TOTAL_ROUNDS = 5;
-const ROUND_DURATION = 18; // seconds to answer (15-20 range)
+const TOTAL_ROUNDS = 2;
+const ROUND_DURATION = 30; // seconds to answer
 const COUNTDOWN_BEFORE_ROUND = 3;
 
 /** Pool of prompts the AI will ask — we pick randomly per round. */
@@ -87,10 +87,10 @@ function getDrachmaReward(totalFillers: number): number {
 }
 
 function getGrade(totalFillers: number): { label: string; color: string } {
-  if (totalFillers === 0) return { label: 'FLAWLESS', color: 'text-amber-400' };
-  if (totalFillers < 3) return { label: 'EXCELLENT', color: 'text-emerald-400' };
-  if (totalFillers < 5) return { label: 'GOOD', color: 'text-slate-400' };
-  if (totalFillers < 8) return { label: 'KEEP GOING', color: 'text-stone-400' };
+  if (totalFillers === 0) return { label: 'FLAWLESS', color: 'text-amber-600' };
+  if (totalFillers < 3) return { label: 'EXCELLENT', color: 'text-emerald-500' };
+  if (totalFillers < 5) return { label: 'GOOD', color: 'text-stone-700' };
+  if (totalFillers < 8) return { label: 'KEEP GOING', color: 'text-stone-600' };
   return { label: 'PRACTICE MORE', color: 'text-stone-500' };
 }
 
@@ -356,11 +356,6 @@ export const ViewKillFillers: React.FC<ViewKillFillersProps> = ({ onExit }) => {
     }
   }, [phase, aiIsSpeaking, lastFeedback, advanceRound]);
 
-  // ── Restart from startRound when currentRound changes (after first round) ──
-  useEffect(() => {
-    // startRound is called explicitly, this just ensures proper cleanup
-  }, [currentRound]);
-
   // ============================================================================
   // COMPUTED VALUES
   // ============================================================================
@@ -371,9 +366,6 @@ export const ViewKillFillers: React.FC<ViewKillFillersProps> = ({ onExit }) => {
 
   const allResults = results;
   const totalFillers = allResults.reduce((s, r) => s + r.fillerCount, 0);
-  const cleanestRound = allResults.length > 0
-    ? allResults.reduce((best, r) => (r.fillerCount < best.fillerCount ? r : best))
-    : null;
 
   const timerPct = (timer / ROUND_DURATION) * 100;
   const timerColor =
@@ -381,356 +373,145 @@ export const ViewKillFillers: React.FC<ViewKillFillersProps> = ({ onExit }) => {
       ? 'text-red-500'
       : timer <= 7
         ? 'text-amber-500'
-        : 'text-emerald-400';
+        : 'text-emerald-500';
+
+  const grade = getGrade(totalFillers);
 
   // ============================================================================
   // RENDER
   // ============================================================================
 
-  // ── INTRO ──────────────────────────────────────────────────────────
-  if (phase === 'intro') {
-    return (
-      <FadeTransition className="fixed inset-0 bg-stone-900 text-white z-50 flex flex-col">
-        <button
-          onClick={onExit}
-          className="absolute top-6 right-6 text-stone-500 hover:text-white transition-colors z-20"
-        >
-          <X className="w-6 h-6" />
-        </button>
-
-        <div className="flex-1 flex flex-col items-center justify-center px-8 text-center">
-          {/* Big icon */}
-          <motion.div
-            initial={{ scale: 0 }}
-            animate={{ scale: 1 }}
-            transition={{ type: 'spring', stiffness: 200, damping: 15, delay: 0.2 }}
-            className="w-28 h-28 rounded-full bg-gradient-to-br from-red-500 to-orange-500 flex items-center justify-center mb-8 shadow-[0_0_60px_rgba(239,68,68,0.4)]"
-          >
-            <Zap className="w-14 h-14 text-white" />
-          </motion.div>
-
-          <motion.h1
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.4 }}
-            className="text-4xl font-serif font-bold mb-3"
-          >
-            Kill the Fillers
-          </motion.h1>
-
-          <motion.p
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.55 }}
-            className="text-stone-400 text-base max-w-sm mb-2"
-          >
-            5 rounds. Random questions. Answer without saying
-            <span className="text-red-400 font-semibold"> "um," "uh," "like," "you know"</span> or
-            any filler word.
-          </motion.p>
-
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.7 }}
-            className="flex flex-col items-center gap-3 mt-4 mb-8"
-          >
-            <div className="flex items-center gap-6 text-sm text-stone-500">
-              <div className="flex items-center gap-2">
-                <Target className="w-4 h-4 text-red-400" />
-                <span>5 rounds</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Shield className="w-4 h-4 text-emerald-400" />
-                <span>~{ROUND_DURATION}s each</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Coins className="w-4 h-4 text-amber-400" />
-                <span>Up to 50Δ</span>
-              </div>
-            </div>
-          </motion.div>
-
-          <motion.button
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.85 }}
-            whileHover={{ scale: 1.03 }}
-            whileTap={{ scale: 0.97 }}
-            onClick={handleStart}
-            className="px-12 py-4 bg-gradient-to-r from-red-500 to-orange-500 text-white text-lg font-bold rounded-2xl shadow-lg shadow-red-500/30 uppercase tracking-wider"
-          >
-            Let's Go
-          </motion.button>
-        </div>
-      </FadeTransition>
-    );
-  }
-
-  // ── SCOREBOARD ─────────────────────────────────────────────────────
-  if (phase === 'scoreboard') {
-    const grade = getGrade(totalFillers);
-
-    return (
-      <FadeTransition className="fixed inset-0 bg-stone-900 text-white z-50 flex flex-col overflow-y-auto">
-        <button
-          onClick={onExit}
-          className="absolute top-6 right-6 text-stone-500 hover:text-white transition-colors z-20"
-        >
-          <X className="w-6 h-6" />
-        </button>
-
-        <div className="flex-1 flex flex-col items-center pt-16 px-6 pb-12">
-          {/* Grade */}
-          <motion.div
-            initial={{ scale: 0 }}
-            animate={{ scale: 1 }}
-            transition={{ type: 'spring', stiffness: 200, damping: 12 }}
-            className="w-20 h-20 rounded-full bg-stone-800 border-2 border-stone-700 mb-4"
-          />
-
-          <motion.h2
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3 }}
-            className={`text-3xl font-serif font-bold mb-1 ${grade.color}`}
-          >
-            {grade.label}
-          </motion.h2>
-
-          <motion.p
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.45 }}
-            className="text-stone-400 text-sm mb-8"
-          >
-            {totalFillers === 0
-              ? 'Not a single filler. Legendary.'
-              : `${totalFillers} total filler${totalFillers !== 1 ? 's' : ''} across ${TOTAL_ROUNDS} rounds`}
-          </motion.p>
-
-          {/* Drachma Award */}
-          <motion.div
-            initial={{ scale: 0.5, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            transition={{ delay: 0.6, type: 'spring', stiffness: 300, damping: 15 }}
-            className="flex items-center gap-3 bg-amber-500/20 border border-amber-500/30 rounded-xl px-6 py-3 mb-8"
-          >
-            <Coins className="w-6 h-6 text-amber-400" />
-            <span className="text-2xl font-mono font-bold text-amber-400">
-              +{drachmaAwarded}Δ
-            </span>
-          </motion.div>
-
-          {/* Round-by-round breakdown */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.75 }}
-            className="w-full max-w-md space-y-3 mb-8"
-          >
-            <h3 className="text-xs uppercase tracking-widest text-stone-500 mb-2">
-              Round Breakdown
-            </h3>
-            {allResults.map((r) => (
-              <div
-                key={r.round}
-                className={`flex items-center justify-between px-4 py-3 rounded-lg border ${
-                  r.fillerCount === 0
-                    ? 'bg-emerald-500/10 border-emerald-500/20'
-                    : r.fillerCount < 3
-                      ? 'bg-amber-500/10 border-amber-500/20'
-                      : 'bg-red-500/10 border-red-500/20'
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  <span className="text-xs font-mono text-stone-500 w-8">
-                    R{r.round}
-                  </span>
-                  <span className="text-sm text-stone-300 truncate max-w-[200px]">
-                    {r.question}
-                  </span>
-                </div>
-                <div className="flex items-center gap-2">
-                  {r.fillerCount === 0 ? (
-                    <span className="text-emerald-400 text-sm font-bold">
-                      CLEAN ✓
-                    </span>
-                  ) : (
-                    <span className="text-red-400 text-sm font-mono font-bold">
-                      {r.fillerCount} filler{r.fillerCount !== 1 ? 's' : ''}
-                    </span>
-                  )}
-                </div>
-              </div>
-            ))}
-          </motion.div>
-
-          {/* Stats row */}
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.9 }}
-            className="flex items-center gap-6 mb-10"
-          >
-            <div className="text-center">
-              <div className="text-2xl font-mono font-bold text-white">
-                {totalFillers}
-              </div>
-              <div className="text-[10px] uppercase tracking-widest text-stone-500">
-                Total Fillers
-              </div>
-            </div>
-            <div className="w-px h-8 bg-stone-700" />
-            <div className="text-center">
-              <div className="text-2xl font-mono font-bold text-emerald-400">
-                {cleanestRound ? cleanestRound.fillerCount : 0}
-              </div>
-              <div className="text-[10px] uppercase tracking-widest text-stone-500">
-                Best Round
-              </div>
-            </div>
-            <div className="w-px h-8 bg-stone-700" />
-            <div className="text-center">
-              <div className="text-2xl font-mono font-bold text-amber-400">
-                {allResults.filter((r) => r.fillerCount === 0).length}/{TOTAL_ROUNDS}
-              </div>
-              <div className="text-[10px] uppercase tracking-widest text-stone-500">
-                Clean Rounds
-              </div>
-            </div>
-          </motion.div>
-
-          {/* Actions */}
-          <div className="flex flex-col items-center gap-3 w-full max-w-xs">
-            <motion.button
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 1.05 }}
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              onClick={() => {
-                setCurrentRound(0);
-                setResults([]);
-                setDrachmaAwarded(0);
-                setPhase('intro');
-                modeSetRef.current = false;
-              }}
-              className="w-full px-8 py-3 bg-gradient-to-r from-red-500 to-orange-500 text-white font-bold rounded-xl shadow-lg shadow-red-500/20 uppercase tracking-wider text-sm"
-            >
-              Play Again
-            </motion.button>
-            <motion.button
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 1.15 }}
-              onClick={onExit}
-              className="w-full px-8 py-3 border border-stone-700 text-stone-400 rounded-xl uppercase tracking-wider text-sm hover:bg-stone-800 transition-colors"
-            >
-              Back to Academy
-            </motion.button>
-          </div>
-        </div>
-      </FadeTransition>
-    );
-  }
-
-  // ── COUNTDOWN / SPEAKING / AI FEEDBACK ─────────────────────────────
   return (
-    <FadeTransition className="fixed inset-0 bg-stone-900 text-white z-50 flex flex-col">
+    <FadeTransition className="flex flex-col items-center justify-center min-h-screen p-6 relative bg-stone-50 text-stone-900 overflow-hidden">
+      <button onClick={onExit} className="absolute top-6 right-6 text-stone-400 hover:text-stone-900 transition-colors z-20">
+        <X className="w-6 h-6" />
+      </button>
+
       {/* Red flash overlay */}
       <AnimatePresence>
         {fillerFlash && (
           <motion.div
             key="flash"
             initial={{ opacity: 0 }}
-            animate={{ opacity: 0.5 }}
+            animate={{ opacity: 0.2 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.15 }}
-            className="absolute inset-0 bg-red-600 z-30 pointer-events-none"
+            className="absolute inset-0 bg-red-500 z-30 pointer-events-none"
           />
         )}
       </AnimatePresence>
 
-      {/* Close button */}
-      <button
-        onClick={onExit}
-        className="absolute top-6 right-6 text-stone-500 hover:text-white transition-colors z-40"
-      >
-        <X className="w-6 h-6" />
-      </button>
-
-      {/* Top bar: Round indicator + filler counter */}
-      <div className="flex items-center justify-between px-6 pt-6 pb-3 z-20">
-        {/* Round pills */}
-        <div className="flex items-center gap-1.5">
+      {/* Stage indicators - only show during active game */}
+      {phase !== 'intro' && phase !== 'scoreboard' && (
+        <div className="absolute top-12 flex gap-2 z-10">
           {Array.from({ length: TOTAL_ROUNDS }).map((_, i) => (
             <div
               key={i}
-              className={`w-8 h-1.5 rounded-full transition-all duration-300 ${
-                i < currentRound
-                  ? 'bg-emerald-400'
-                  : i === currentRound
-                    ? 'bg-red-400'
-                    : 'bg-stone-700'
+              className={`w-1.5 h-1.5 rounded-full ${
+                i < currentRound ? 'bg-emerald-500' : i === currentRound ? 'bg-stone-900' : 'bg-stone-300'
               }`}
             />
           ))}
-          <span className="ml-2 text-xs font-mono text-stone-500">
-            R{currentRound + 1}/{TOTAL_ROUNDS}
-          </span>
         </div>
+      )}
 
-        {/* Filler counter */}
+      {/* Filler counter badge - only show during speaking */}
+      {phase === 'speaking' && (
         <motion.div
-          animate={
-            fillerFlash
-              ? { scale: [1, 1.4, 1], color: ['#ef4444', '#ff0000', '#ef4444'] }
-              : {}
-          }
+          className="absolute top-12 right-6 z-20"
+          animate={fillerFlash ? { scale: [1, 1.2, 1] } : {}}
           transition={{ duration: 0.3 }}
-          className={`flex items-center gap-2 px-3 py-1 rounded-full border ${
-            currentFillers > 0
-              ? 'bg-red-500/20 border-red-500/40 text-red-400'
-              : 'bg-stone-800 border-stone-700 text-stone-400'
-          }`}
         >
-          <Zap className="w-3.5 h-3.5" />
-          <span className="text-sm font-mono font-bold">{currentFillers}</span>
+          <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full border ${
+            currentFillers > 0
+              ? 'bg-red-50 border-red-300 text-red-600'
+              : 'bg-white/60 border-stone-200 text-stone-600'
+          }`}>
+            <Zap className="w-3.5 h-3.5" />
+            <span className="text-sm font-mono font-bold">{currentFillers}</span>
+          </div>
         </motion.div>
-      </div>
+      )}
 
-      {/* Main content area */}
-      <div className="flex-1 flex flex-col items-center justify-center px-8 relative">
-        {/* ── COUNTDOWN PHASE ─────────────────────────── */}
+      <div className="flex-1 flex flex-col items-center justify-center w-full max-w-lg z-10 text-center">
         <AnimatePresence mode="wait">
+          {/* ───── INTRO PHASE ───── */}
+          {phase === 'intro' && (
+            <motion.div
+              key="intro"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="flex flex-col items-center"
+            >
+              <h2 className="text-4xl font-serif font-light mb-1">Kill the Fillers</h2>
+              <p className="text-stone-500 font-serif italic mb-10">
+                Speak clearly. No fillers.
+              </p>
+
+              <div className="flex items-center gap-2 text-stone-600 mb-6">
+                <Zap className="w-5 h-5" />
+                <span className="text-sm uppercase tracking-widest font-medium">Filler Detection</span>
+              </div>
+
+              <p className="text-base text-stone-700 mb-8 max-w-sm leading-relaxed">
+                Answer questions without saying "um," "uh," "like," or "you know"
+              </p>
+
+              {/* Stats */}
+              <div className="flex items-center gap-4 text-xs text-stone-500 mb-10">
+                <div className="flex items-center gap-1.5">
+                  <Target className="w-3.5 h-3.5" />
+                  <span>{TOTAL_ROUNDS} rounds</span>
+                </div>
+                <div className="w-px h-3 bg-stone-300" />
+                <div className="flex items-center gap-1.5">
+                  <Shield className="w-3.5 h-3.5" />
+                  <span>{ROUND_DURATION}s each</span>
+                </div>
+                <div className="w-px h-3 bg-stone-300" />
+                <div className="flex items-center gap-1.5">
+                  <Coins className="w-3.5 h-3.5" />
+                  <span>Up to 50Δ</span>
+                </div>
+              </div>
+
+              <button
+                onClick={handleStart}
+                className="px-5 py-2 bg-stone-900 text-stone-50 rounded-full text-sm uppercase tracking-widest hover:bg-stone-800 transition-colors"
+              >
+                Start
+              </button>
+            </motion.div>
+          )}
+
+          {/* ───── COUNTDOWN PHASE ───── */}
           {phase === 'countdown' && (
             <motion.div
               key="countdown"
-              initial={{ scale: 0.5, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 2, opacity: 0 }}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
               className="flex flex-col items-center"
             >
-              <p className="text-stone-400 text-sm mb-6 text-center max-w-sm">
+              <p className="text-stone-600 text-sm mb-10 text-center max-w-md font-serif">
                 {questions[currentRound]}
               </p>
               <motion.span
                 key={countdown}
-                initial={{ scale: 0.5, opacity: 0 }}
+                initial={{ scale: 0.8, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
-                exit={{ scale: 1.5, opacity: 0 }}
-                className="text-8xl font-mono font-bold text-red-400"
+                className="text-8xl font-mono font-bold text-stone-900"
               >
                 {countdown}
               </motion.span>
-              <p className="text-stone-500 text-xs mt-4 uppercase tracking-widest">
+              <p className="text-stone-500 text-xs mt-6 uppercase tracking-widest">
                 Get ready…
               </p>
             </motion.div>
           )}
 
-          {/* ── SPEAKING PHASE ────────────────────────── */}
+          {/* ───── SPEAKING PHASE ───── */}
           {phase === 'speaking' && (
             <motion.div
               key="speaking"
@@ -740,12 +521,12 @@ export const ViewKillFillers: React.FC<ViewKillFillersProps> = ({ onExit }) => {
               className="flex flex-col items-center w-full"
             >
               {/* Question */}
-              <p className="text-stone-300 text-base mb-8 text-center max-w-md font-serif italic">
+              <p className="text-stone-700 text-base mb-8 text-center max-w-md font-serif italic">
                 "{questions[currentRound]}"
               </p>
 
               {/* Timer ring */}
-              <div className="relative w-44 h-44 mb-8">
+              <div className="relative w-40 h-40 mb-8">
                 <svg className="w-full h-full -rotate-90" viewBox="0 0 100 100">
                   {/* Background circle */}
                   <circle
@@ -754,8 +535,8 @@ export const ViewKillFillers: React.FC<ViewKillFillersProps> = ({ onExit }) => {
                     r="42"
                     fill="none"
                     stroke="currentColor"
-                    strokeWidth="4"
-                    className="text-stone-800"
+                    strokeWidth="3"
+                    className="text-stone-200"
                   />
                   {/* Progress circle */}
                   <circle
@@ -764,7 +545,7 @@ export const ViewKillFillers: React.FC<ViewKillFillersProps> = ({ onExit }) => {
                     r="42"
                     fill="none"
                     stroke="currentColor"
-                    strokeWidth="4"
+                    strokeWidth="3"
                     strokeLinecap="round"
                     strokeDasharray={`${2 * Math.PI * 42}`}
                     strokeDashoffset={`${2 * Math.PI * 42 * (1 - timerPct / 100)}`}
@@ -784,11 +565,11 @@ export const ViewKillFillers: React.FC<ViewKillFillersProps> = ({ onExit }) => {
 
               {/* Mic indicator */}
               <motion.div
-                animate={{ scale: [1, 1.15, 1] }}
+                animate={{ scale: [1, 1.1, 1] }}
                 transition={{ repeat: Infinity, duration: 1.5 }}
-                className="flex items-center gap-2 text-emerald-400"
+                className="flex items-center gap-2 text-emerald-500"
               >
-                <Mic className="w-5 h-5" />
+                <Mic className="w-4 h-4" />
                 <span className="text-sm font-medium">Listening…</span>
               </motion.div>
 
@@ -797,17 +578,17 @@ export const ViewKillFillers: React.FC<ViewKillFillersProps> = ({ onExit }) => {
                 {buzzerWord && (
                   <motion.div
                     key="buzzer"
-                    initial={{ scale: 0, opacity: 0, y: 20 }}
-                    animate={{ scale: 1, opacity: 1, y: 0 }}
-                    exit={{ scale: 0, opacity: 0, y: -20 }}
-                    className="absolute bottom-32 bg-red-500 text-white px-6 py-3 rounded-xl shadow-2xl shadow-red-500/40"
+                    initial={{ scale: 0, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    exit={{ scale: 0, opacity: 0 }}
+                    transition={{ type: 'spring', stiffness: 300, damping: 20 }}
+                    className="absolute bottom-20 bg-red-500 text-white px-4 py-2 rounded-lg shadow-lg"
                   >
                     <div className="flex items-center gap-2">
-                      <Zap className="w-5 h-5" />
-                      <span className="text-lg font-bold uppercase">
+                      <Zap className="w-4 h-4" />
+                      <span className="text-base font-bold">
                         "{buzzerWord}"
                       </span>
-                      <Volume2 className="w-4 h-4 opacity-60" />
                     </div>
                   </motion.div>
                 )}
@@ -815,36 +596,28 @@ export const ViewKillFillers: React.FC<ViewKillFillersProps> = ({ onExit }) => {
             </motion.div>
           )}
 
-          {/* ── AI FEEDBACK PHASE ─────────────────────── */}
+          {/* ───── AI FEEDBACK PHASE ───── */}
           {phase === 'ai-feedback' && (
             <motion.div
               key="feedback"
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
-              className="flex flex-col items-center text-center px-4"
+              className="flex flex-col items-center text-center"
             >
-              {/* Round result icon */}
-              {results[results.length - 1]?.fillerCount === 0 ? (
-                <motion.div
-                  initial={{ scale: 0 }}
-                  animate={{ scale: 1 }}
-                  transition={{ type: 'spring', stiffness: 300, damping: 12 }}
-                  className="w-20 h-20 rounded-full bg-emerald-500/20 border-2 border-emerald-500 mb-6"
-                />
-              ) : (
-                <motion.div
-                  initial={{ scale: 0 }}
-                  animate={{ scale: 1 }}
-                  transition={{ type: 'spring', stiffness: 300, damping: 12 }}
-                  className="w-20 h-20 rounded-full bg-stone-700 border-2 border-stone-600 mb-6"
-                />
-              )}
+              {/* Round result indicator */}
+              <div className="w-16 h-16 rounded-full bg-stone-100 flex items-center justify-center mb-6">
+                {results[results.length - 1]?.fillerCount === 0 ? (
+                  <Trophy className="w-8 h-8 text-emerald-500" />
+                ) : (
+                  <Zap className="w-8 h-8 text-stone-400" />
+                )}
+              </div>
 
               {/* Filler count for this round */}
-              <h3 className="text-2xl font-serif font-bold mb-2">
+              <h3 className="text-2xl font-serif font-light mb-4">
                 {results[results.length - 1]?.fillerCount === 0
-                  ? 'CLEAN ROUND!'
+                  ? 'Clean round!'
                   : `${results[results.length - 1]?.fillerCount} filler${results[results.length - 1]?.fillerCount !== 1 ? 's' : ''}`}
               </h3>
 
@@ -854,49 +627,120 @@ export const ViewKillFillers: React.FC<ViewKillFillersProps> = ({ onExit }) => {
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   transition={{ delay: 0.3 }}
-                  className="text-stone-400 text-sm max-w-sm italic mb-6"
+                  className="text-stone-600 text-sm max-w-sm italic mb-6"
                 >
                   "{lastFeedback}"
                 </motion.p>
               )}
 
-              {/* Manual advance button (in case auto-advance doesn't fire) */}
-              <motion.button
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: 1.5 }}
+              {/* Progress indicator */}
+              <div className="flex gap-2 mb-6">
+                {Array.from({ length: TOTAL_ROUNDS }).map((_, i) => (
+                  <div
+                    key={i}
+                    className={`w-2 h-2 rounded-full ${
+                      i <= currentRound ? 'bg-stone-900' : 'bg-stone-300'
+                    }`}
+                  />
+                ))}
+              </div>
+
+              {/* Manual advance button */}
+              <button
                 onClick={advanceRound}
-                className="flex items-center gap-2 text-sm text-stone-400 hover:text-white transition-colors mt-4"
+                className="text-sm text-stone-600 hover:text-stone-900 transition-colors flex items-center gap-1"
               >
                 {currentRound + 1 < TOTAL_ROUNDS ? (
-                  <>
-                    Next Round <ChevronRight className="w-4 h-4" />
-                  </>
+                  <>Next Round <ChevronRight className="w-4 h-4" /></>
                 ) : (
-                  <>
-                    See Results <Trophy className="w-4 h-4 text-amber-400" />
-                  </>
+                  <>See Results <ChevronRight className="w-4 h-4" /></>
                 )}
-              </motion.button>
+              </button>
+            </motion.div>
+          )}
+
+          {/* ───── SCOREBOARD PHASE ───── */}
+          {phase === 'scoreboard' && (
+            <motion.div
+              key="scoreboard"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="flex flex-col items-center w-full"
+            >
+              <motion.div
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                transition={{ type: 'spring', stiffness: 200, damping: 15 }}
+                className="w-20 h-20 rounded-full bg-emerald-50 flex items-center justify-center mb-6"
+              >
+                <Sparkles className="w-10 h-10 text-emerald-600" />
+              </motion.div>
+
+              <h2 className={`text-3xl font-serif font-light mb-2 ${grade.color}`}>
+                {grade.label}
+              </h2>
+
+              <p className="text-stone-600 text-sm mb-8">
+                {totalFillers === 0
+                  ? 'Not a single filler. Legendary.'
+                  : `${totalFillers} total filler${totalFillers !== 1 ? 's' : ''} across ${TOTAL_ROUNDS} rounds`}
+              </p>
+
+              {/* Drachma Award */}
+              <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-lg px-5 py-3 mb-8">
+                <Coins className="w-5 h-5 text-amber-600" />
+                <span className="text-xl font-mono font-bold text-amber-600">
+                  +{drachmaAwarded}Δ
+                </span>
+              </div>
+
+              {/* Round breakdown */}
+              <div className="w-full max-w-sm space-y-2 mb-8">
+                <h3 className="text-xs uppercase tracking-widest text-stone-500 mb-3">
+                  Round Breakdown
+                </h3>
+                {allResults.map((r) => (
+                  <div
+                    key={r.round}
+                    className={`flex items-center justify-between px-3 py-2 rounded-lg text-sm ${
+                      r.fillerCount === 0
+                        ? 'bg-emerald-50 text-emerald-700'
+                        : 'bg-stone-100 text-stone-700'
+                    }`}
+                  >
+                    <span className="font-medium">Round {r.round}</span>
+                    <span className="text-xs">
+                      {r.fillerCount === 0 ? 'Clean ✓' : `${r.fillerCount} filler${r.fillerCount !== 1 ? 's' : ''}`}
+                    </span>
+                  </div>
+                ))}
+              </div>
+
+              {/* Actions */}
+              <div className="flex flex-col gap-3 w-full max-w-xs">
+                <button
+                  onClick={() => {
+                    setCurrentRound(0);
+                    setResults([]);
+                    setDrachmaAwarded(0);
+                    setPhase('intro');
+                    modeSetRef.current = false;
+                  }}
+                  className="px-5 py-2 bg-stone-900 text-stone-50 rounded-full text-sm uppercase tracking-widest hover:bg-stone-800 transition-colors"
+                >
+                  Play Again
+                </button>
+                <button
+                  onClick={onExit}
+                  className="text-stone-900 border-b border-stone-900 pb-1 text-sm uppercase tracking-widest hover:text-stone-700 transition-colors"
+                >
+                  Back to Academy →
+                </button>
+              </div>
             </motion.div>
           )}
         </AnimatePresence>
-      </div>
-
-      {/* Bottom: total filler tally */}
-      <div className="px-6 pb-6 flex items-center justify-center gap-8 text-xs text-stone-500 font-mono">
-        <span>
-          Total fillers:{' '}
-          <span className={totalFillers > 0 ? 'text-red-400 font-bold' : 'text-emerald-400 font-bold'}>
-            {totalFillers}
-          </span>
-        </span>
-        <span>
-          Clean rounds:{' '}
-          <span className="text-emerald-400 font-bold">
-            {allResults.filter((r) => r.fillerCount === 0).length}
-          </span>
-        </span>
       </div>
     </FadeTransition>
   );
