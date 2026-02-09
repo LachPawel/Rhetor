@@ -1,8 +1,11 @@
 /**
- * PostureSkeleton — draws a minimal, barely-visible white skeleton overlay.
+ * PostureSkeleton — draws skeleton overlays on a video feed.
  *
- * Thin half-opaque white lines + tiny dots. Deliberately subtle so it
- * doesn't distract from the speaker's practice.
+ * Supports two modes:
+ *  1. **Subtle** (default) — thin half-opaque white lines for practice view.
+ *  2. **Warm-up** — bolder user skeleton + semi-transparent green reference
+ *     skeleton showing the ideal pose. The user skeleton turns green when
+ *     `posePass` is true.
  */
 
 import React, { useEffect, useRef } from 'react';
@@ -20,11 +23,65 @@ interface PostureSkeletonProps {
   score: number;
   /** Minimum confidence to draw a keypoint */
   minScore?: number;
+  /** Optional reference/ideal keypoints to draw as a green ghost */
+  referenceKeypoints?: Keypoint[];
+  /** Whether the user currently matches the target pose */
+  posePass?: boolean;
+  /** Use bolder strokes for warm-up view */
+  bold?: boolean;
 }
 
-// Constant subtle colors
-const BONE_COLOR = 'rgba(255, 255, 255, 0.35)';
-const DOT_COLOR = 'rgba(255, 255, 255, 0.45)';
+// ── Color palettes ──────────────────────────────────────────────────────
+// Subtle (default — practice mode)
+const BONE_COLOR_SUBTLE = 'rgba(255, 255, 255, 0.35)';
+const DOT_COLOR_SUBTLE = 'rgba(255, 255, 255, 0.45)';
+
+// Bold (warm-up) — white when not matching, green when matching
+const BONE_COLOR_BOLD_DEFAULT = 'rgba(255, 255, 255, 0.7)';
+const DOT_COLOR_BOLD_DEFAULT = 'rgba(255, 255, 255, 0.85)';
+const BONE_COLOR_BOLD_PASS = 'rgba(74, 222, 128, 0.8)'; // green-400
+const DOT_COLOR_BOLD_PASS = 'rgba(74, 222, 128, 0.9)';
+
+// Reference skeleton — always a dimmed green ghost
+const REF_BONE_COLOR = 'rgba(74, 222, 128, 0.22)';
+const REF_DOT_COLOR = 'rgba(74, 222, 128, 0.30)';
+
+/** Draw one skeleton (bones + dots) onto the context */
+function drawSkeleton(
+  ctx: CanvasRenderingContext2D,
+  keypoints: Keypoint[],
+  boneColor: string,
+  dotColor: string,
+  lineWidth: number,
+  dotRadius: number,
+  minScore: number,
+) {
+  // Bones
+  ctx.strokeStyle = boneColor;
+  ctx.lineWidth = lineWidth;
+  ctx.lineCap = 'round';
+  for (const [i, j] of SKELETON_EDGES) {
+    const a = keypoints[i];
+    const b = keypoints[j];
+    if (!a || !b) continue;
+    if ((a.score ?? 0) < minScore || (b.score ?? 0) < minScore) continue;
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y);
+    ctx.lineTo(b.x, b.y);
+    ctx.stroke();
+  }
+
+  // Dots (body only)
+  ctx.fillStyle = dotColor;
+  for (let i = 0; i < keypoints.length; i++) {
+    if (FACE_KEYPOINT_IDS.has(i)) continue;
+    const k = keypoints[i];
+    if ((k.score ?? 0) < minScore) continue;
+    ctx.beginPath();
+    ctx.arc(k.x, k.y, dotRadius, 0, 2 * Math.PI);
+    ctx.fill();
+  }
+}
 
 export const PostureSkeleton: React.FC<PostureSkeletonProps> = ({
   keypoints,
@@ -32,6 +89,9 @@ export const PostureSkeleton: React.FC<PostureSkeletonProps> = ({
   videoHeight,
   score: _score,
   minScore = 0.3,
+  referenceKeypoints,
+  posePass = false,
+  bold = false,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -51,36 +111,22 @@ export const PostureSkeleton: React.FC<PostureSkeletonProps> = ({
     ctx.translate(videoWidth, 0);
     ctx.scale(-1, 1);
 
-    // ── Bones — thin white lines ─────────────────────────────────────────
-    ctx.strokeStyle = BONE_COLOR;
-    ctx.lineWidth = 1.5;
-    ctx.lineCap = 'round';
-
-    for (const [i, j] of SKELETON_EDGES) {
-      const a = keypoints[i];
-      const b = keypoints[j];
-      if (!a || !b) continue;
-      if ((a.score ?? 0) < minScore || (b.score ?? 0) < minScore) continue;
-
-      ctx.beginPath();
-      ctx.moveTo(a.x, a.y);
-      ctx.lineTo(b.x, b.y);
-      ctx.stroke();
+    // ── 1. Reference skeleton (drawn first, behind user skeleton) ────────
+    if (referenceKeypoints && referenceKeypoints.length > 0) {
+      drawSkeleton(ctx, referenceKeypoints, REF_BONE_COLOR, REF_DOT_COLOR, 3, 4, 0.5);
     }
 
-    // ── Keypoints — tiny dots (body only, skip face) ──────────────────────
-    ctx.fillStyle = DOT_COLOR;
-    for (let i = 0; i < keypoints.length; i++) {
-      if (FACE_KEYPOINT_IDS.has(i)) continue;
-      const kp = keypoints[i];
-      if ((kp.score ?? 0) < minScore) continue;
-      ctx.beginPath();
-      ctx.arc(kp.x, kp.y, 2.5, 0, 2 * Math.PI);
-      ctx.fill();
+    // ── 2. User skeleton ─────────────────────────────────────────────────
+    if (bold) {
+      const boneCol = posePass ? BONE_COLOR_BOLD_PASS : BONE_COLOR_BOLD_DEFAULT;
+      const dotCol = posePass ? DOT_COLOR_BOLD_PASS : DOT_COLOR_BOLD_DEFAULT;
+      drawSkeleton(ctx, keypoints, boneCol, dotCol, 2.5, 4, minScore);
+    } else {
+      drawSkeleton(ctx, keypoints, BONE_COLOR_SUBTLE, DOT_COLOR_SUBTLE, 1.5, 2.5, minScore);
     }
 
     ctx.restore();
-  }, [keypoints, videoWidth, videoHeight, _score, minScore]);
+  }, [keypoints, videoWidth, videoHeight, _score, minScore, referenceKeypoints, posePass, bold]);
 
   return (
     <canvas

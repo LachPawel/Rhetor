@@ -1,11 +1,14 @@
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FadeTransition } from './FadeTransition.tsx';
-import { X, Wind, Pause, ArrowDown, ChevronRight, Music, Waves, Type, SkipForward, Hand, Crown, Footprints, Sparkles, Coins } from 'lucide-react';
+import { X, Wind, Pause, ArrowDown, ChevronRight, Music, Waves, Type, SkipForward, Hand, Crown, Footprints, Sparkles, Coins, Check } from 'lucide-react';
 import { useRhetor } from '../contexts/RhetorContext.tsx';
 import { AgentMode } from '../types.ts';
 import { PitchDetector, type PitchFrame } from '../lib/pitch_detector.ts';
+import { PostureDetector, type PostureFrame, type Keypoint } from '../lib/posture_detector.ts';
+import { PostureSkeleton } from './PostureSkeleton.tsx';
+import { verifyPose, getReferenceKeypoints, type PoseCheckResult } from '../lib/pose_verifier.ts';
 
 type BreathPhase = 'idle' | 'inhale' | 'hold' | 'exhale' | 'hold-empty';
 
@@ -91,6 +94,7 @@ const BODY_EXERCISES: BodyExercise[] = [
     title: 'Tension Release',
     icon: <Hand className="w-5 h-5" />,
     totalDuration: 30,
+    showCamera: true,
     subSteps: [
       { instruction: 'Scrunch your face tight — hold 5s — release', duration: 10 },
       { instruction: 'Shrug shoulders to ears — hold 5s — drop', duration: 10 },
@@ -112,6 +116,7 @@ const BODY_EXERCISES: BodyExercise[] = [
     title: 'Grounding',
     icon: <Footprints className="w-5 h-5" />,
     totalDuration: 15,
+    showCamera: true,
     subSteps: [
       { instruction: 'Feel your feet on the floor. One deep breath. You are ready.', duration: 15 },
     ],
@@ -274,20 +279,51 @@ export const ViewWarmUp: React.FC<ViewWarmUpProps> = ({ onComplete, onExit }) =>
   const [showReward, setShowReward] = useState(false);
   const bodyAutoRef = useRef(false);
 
+  // ── Posture / skeleton state (body stage CV) ──────────────────────────
+  const postureDetectorRef = useRef<PostureDetector | null>(null);
+  const [postureReady, setPostureReady] = useState(false);
+  const [postureFrame, setPostureFrame] = useState<PostureFrame | null>(null);
+  const [videoDims, setVideoDims] = useState({ width: 0, height: 0 });
+  const [poseCheck, setPoseCheck] = useState<PoseCheckResult>({ pass: false, checks: {}, hint: null });
+
   // ── Pitch tracking state (for humming visualisation) ──────────────────
   const pitchDetectorRef = useRef<PitchDetector | null>(null);
   const [pitchHistory, setPitchHistory] = useState<PitchFrame[]>([]);
 
-  // Set mode when connected - reset on disconnect so it re-fires after reconnection
-  const modeSetRef = useRef(false);
+  // ── Sync AI coach with current stage / exercise / sub-step ────────────
+  // Fires on mount AND whenever the stage, exercise, or sub-step changes,
+  // so the AI gives the right verbal cue at the right moment.
   useEffect(() => {
-    if (isConnected && !modeSetRef.current) {
-      modeSetRef.current = true;
-      setMode(AgentMode.COACH_WARMUP);
-    } else if (!isConnected) {
-      modeSetRef.current = false;
+    if (!isConnected) return;
+
+    let exerciseType = currentStage.id; // 'breathe' | 'voice' | 'body'
+    let stepNumber = 0;
+    let stage: string | undefined;
+    let detail: { exerciseName?: string; instruction?: string; poseMatched?: boolean; poseHint?: string | null } | undefined;
+
+    if (currentStage.id === 'voice') {
+      const ex = VOICE_EXERCISES[voiceExIndex];
+      exerciseType = ex?.id ?? 'voice';
+      stepNumber = voiceExIndex;
+      stage = 'voice';
+    } else if (currentStage.id === 'body') {
+      const ex = BODY_EXERCISES[bodyExIndex];
+      const step = ex?.subSteps[bodySubStep];
+      exerciseType = ex?.id ?? 'body';
+      stepNumber = bodySubStep;
+      stage = 'body';
+      detail = {
+        exerciseName: ex?.title,
+        instruction: step?.instruction,
+        poseMatched: poseCheck.pass,
+        poseHint: poseCheck.hint,
+      };
+    } else {
+      stage = 'breathe';
     }
-  }, [isConnected, setMode]);
+
+    setMode(AgentMode.COACH_WARMUP, { exerciseType, stepNumber, stage, detail });
+  }, [isConnected, currentStage.id, voiceExIndex, bodyExIndex, bodySubStep, poseCheck.pass, setMode]);
 
   // ── Pitch detector lifecycle (humming & lip-trills exercises) ───────────
   const isPitchExerciseActive = currentStage.id === 'voice' && voiceRunning &&
@@ -585,7 +621,7 @@ export const ViewWarmUp: React.FC<ViewWarmUpProps> = ({ onComplete, onExit }) =>
   // Does the current body exercise need the camera?
   const bodyNeedsCamera = bodyRunning && BODY_EXERCISES[bodyExIndex]?.showCamera;
 
-  // Camera Logic for BODY stage (activates for power-pose sub-exercise)
+  // Camera Logic for BODY stage
   useEffect(() => {
     let localStream: MediaStream | null = null;
     let mounted = true;
@@ -617,6 +653,87 @@ export const ViewWarmUp: React.FC<ViewWarmUpProps> = ({ onComplete, onExit }) =>
       }
     };
   }, [currentStage.id, bodyNeedsCamera]);
+
+  // Wire srcObject once the <video> element renders and stream is available
+  useEffect(() => {
+    if (videoRef.current && stream) {
+      videoRef.current.srcObject = stream;
+    }
+  }, [stream]);
+
+  // ── PostureDetector lifecycle (deferred init, same pattern as ViewPractice) ─
+  useEffect(() => {
+    if (currentStage.id !== 'body' || !bodyNeedsCamera) return;
+
+    let cancelled = false;
+    const detector = new PostureDetector({
+      intervalMs: 250,
+      minKeypointScore: 0.25,
+      calibrationSamples: 1, // skip calibration for warm-up — we only need raw keypoints
+      onFrame: (frame: PostureFrame) => {
+        if (cancelled) return;
+        setPostureFrame(frame);
+      },
+    });
+    postureDetectorRef.current = detector;
+
+    // 2 s delay to avoid GPU contention with Gemini audio
+    const initTimer = setTimeout(() => {
+      if (cancelled) return;
+      detector.init().then(() => {
+        if (cancelled) return;
+        setPostureReady(true);
+      }).catch(console.warn);
+    }, 2000);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(initTimer);
+      detector.dispose();
+      postureDetectorRef.current = null;
+      setPostureReady(false);
+      setPostureFrame(null);
+      setPoseCheck({ pass: false, checks: {}, hint: null });
+    };
+  }, [currentStage.id, bodyNeedsCamera]);
+
+  // Start posture detection once detector + video are ready
+  useEffect(() => {
+    if (!postureReady || !videoRef.current || !stream) return;
+    const video = videoRef.current;
+
+    const tryStart = () => {
+      if (video.readyState >= 2 && postureDetectorRef.current?.ready) {
+        setVideoDims({ width: video.videoWidth, height: video.videoHeight });
+        postureDetectorRef.current.start(video);
+      }
+    };
+
+    if (video.readyState >= 2) tryStart();
+    else video.addEventListener('loadeddata', tryStart, { once: true });
+
+    return () => {
+      postureDetectorRef.current?.stop();
+      video.removeEventListener('loadeddata', tryStart);
+    };
+  }, [postureReady, stream]);
+
+  // ── Pose verification (runs every time we get a new posture frame) ────
+  useEffect(() => {
+    if (!postureFrame || !bodyRunning) return;
+    const ex = BODY_EXERCISES[bodyExIndex];
+    if (!ex) return;
+    const result = verifyPose(ex.id, bodySubStep, postureFrame.keypoints);
+    setPoseCheck(result);
+  }, [postureFrame, bodyRunning, bodyExIndex, bodySubStep]);
+
+  // Compute reference keypoints for the current exercise
+  const referenceKeypoints = useMemo(() => {
+    if (!bodyRunning || videoDims.width === 0) return undefined;
+    const ex = BODY_EXERCISES[bodyExIndex];
+    if (!ex) return undefined;
+    return getReferenceKeypoints(ex.id, bodySubStep, videoDims.width, videoDims.height);
+  }, [bodyRunning, bodyExIndex, bodySubStep, videoDims.width, videoDims.height]);
 
   const handleNext = () => {
     if (stageIndex < STAGES.length - 1) {
@@ -962,6 +1079,54 @@ export const ViewWarmUp: React.FC<ViewWarmUpProps> = ({ onComplete, onExit }) =>
                       </motion.div>
                     ) : (
                       /* Exercise content */
+                      <div className="flex flex-col items-center w-full">
+                        {/* Persistent camera feed — lives outside AnimatePresence so the
+                            <video> element doesn't get unmounted on exercise transitions */}
+                        {bodyNeedsCamera && stream && (
+                          <div className="relative w-full max-w-xs aspect-[3/4] bg-black rounded-lg overflow-hidden mb-5">
+                            <video
+                              ref={videoRef}
+                              autoPlay
+                              playsInline
+                              muted
+                              className="w-full h-full object-cover transform -scale-x-100"
+                            />
+                            {/* Dual skeleton overlay: user + reference */}
+                            {postureFrame && videoDims.width > 0 && (
+                              <PostureSkeleton
+                                keypoints={postureFrame.keypoints}
+                                videoWidth={videoDims.width}
+                                videoHeight={videoDims.height}
+                                score={0}
+                                referenceKeypoints={referenceKeypoints}
+                                posePass={poseCheck.pass}
+                                bold
+                              />
+                            )}
+                            {/* Pose feedback badge */}
+                            {postureFrame && (
+                              <div className="absolute top-2 left-2 right-2 flex justify-between items-start pointer-events-none" style={{ zIndex: 20 }}>
+                                {poseCheck.pass ? (
+                                  <span className="flex items-center gap-1 px-2 py-1 bg-emerald-500/80 text-white text-[10px] rounded-full font-medium">
+                                    <Check className="w-3 h-3" /> Pose matched
+                                  </span>
+                                ) : poseCheck.hint ? (
+                                  <span className="px-2 py-1 bg-black/50 text-white text-[10px] rounded-full">
+                                    {poseCheck.hint}
+                                  </span>
+                                ) : null}
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Fallback when camera not available */}
+                        {bodyNeedsCamera && !stream && (
+                          <div className="w-32 h-40 rounded-xl bg-stone-100 flex items-center justify-center mb-5">
+                            <Crown className="w-12 h-12 text-stone-300" />
+                          </div>
+                        )}
+
                       <AnimatePresence mode="wait">
                         {(() => {
                           const ex = BODY_EXERCISES[bodyExIndex];
@@ -982,30 +1147,6 @@ export const ViewWarmUp: React.FC<ViewWarmUpProps> = ({ onComplete, onExit }) =>
                                 {ex.icon}
                                 <span className="text-sm uppercase tracking-widest font-medium">{ex.title}</span>
                               </div>
-
-                              {/* Camera feed for power pose */}
-                              {ex.showCamera && bodyRunning && stream && (
-                                <div className="relative w-full max-w-xs aspect-[3/4] bg-black rounded-lg overflow-hidden mb-5">
-                                  <video
-                                    ref={videoRef}
-                                    autoPlay
-                                    playsInline
-                                    muted
-                                    className="w-full h-full object-cover transform -scale-x-100"
-                                  />
-                                  {/* Silhouette overlay hint */}
-                                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                                    <div className="w-24 h-32 border-2 border-dashed border-white/20 rounded-xl" />
-                                  </div>
-                                </div>
-                              )}
-
-                              {/* Power-pose silhouette icon when camera not available */}
-                              {ex.showCamera && bodyRunning && !stream && (
-                                <div className="w-32 h-40 rounded-xl bg-stone-100 flex items-center justify-center mb-5">
-                                  <Crown className="w-12 h-12 text-stone-300" />
-                                </div>
-                              )}
 
                               {/* Instruction text */}
                               {step && (
@@ -1070,6 +1211,7 @@ export const ViewWarmUp: React.FC<ViewWarmUpProps> = ({ onComplete, onExit }) =>
                           );
                         })()}
                       </AnimatePresence>
+                      </div>
                     )}
                  </motion.div>
              )}
