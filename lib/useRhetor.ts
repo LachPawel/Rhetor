@@ -455,7 +455,8 @@ export function useRhetor(options: UseRhetorOptions): UseRhetorReturn {
           user,
           (context?.exerciseType as string) ?? 'breathing',
           (context?.stepNumber as number) ?? 0,
-          (context?.stage as string) ?? undefined
+          (context?.stage as string) ?? undefined,
+          context?.detail as { exerciseName?: string; instruction?: string; poseMatched?: boolean; poseHint?: string | null } | undefined
         );
         break;
       case 'coach_practice':

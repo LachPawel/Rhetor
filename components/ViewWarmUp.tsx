@@ -290,16 +290,40 @@ export const ViewWarmUp: React.FC<ViewWarmUpProps> = ({ onComplete, onExit }) =>
   const pitchDetectorRef = useRef<PitchDetector | null>(null);
   const [pitchHistory, setPitchHistory] = useState<PitchFrame[]>([]);
 
-  // Set mode when connected - reset on disconnect so it re-fires after reconnection
-  const modeSetRef = useRef(false);
+  // ── Sync AI coach with current stage / exercise / sub-step ────────────
+  // Fires on mount AND whenever the stage, exercise, or sub-step changes,
+  // so the AI gives the right verbal cue at the right moment.
   useEffect(() => {
-    if (isConnected && !modeSetRef.current) {
-      modeSetRef.current = true;
-      setMode(AgentMode.COACH_WARMUP);
-    } else if (!isConnected) {
-      modeSetRef.current = false;
+    if (!isConnected) return;
+
+    let exerciseType = currentStage.id; // 'breathe' | 'voice' | 'body'
+    let stepNumber = 0;
+    let stage: string | undefined;
+    let detail: { exerciseName?: string; instruction?: string; poseMatched?: boolean; poseHint?: string | null } | undefined;
+
+    if (currentStage.id === 'voice') {
+      const ex = VOICE_EXERCISES[voiceExIndex];
+      exerciseType = ex?.id ?? 'voice';
+      stepNumber = voiceExIndex;
+      stage = 'voice';
+    } else if (currentStage.id === 'body') {
+      const ex = BODY_EXERCISES[bodyExIndex];
+      const step = ex?.subSteps[bodySubStep];
+      exerciseType = ex?.id ?? 'body';
+      stepNumber = bodySubStep;
+      stage = 'body';
+      detail = {
+        exerciseName: ex?.title,
+        instruction: step?.instruction,
+        poseMatched: poseCheck.pass,
+        poseHint: poseCheck.hint,
+      };
+    } else {
+      stage = 'breathe';
     }
-  }, [isConnected, setMode]);
+
+    setMode(AgentMode.COACH_WARMUP, { exerciseType, stepNumber, stage, detail });
+  }, [isConnected, currentStage.id, voiceExIndex, bodyExIndex, bodySubStep, poseCheck.pass, setMode]);
 
   // ── Pitch detector lifecycle (humming & lip-trills exercises) ───────────
   const isPitchExerciseActive = currentStage.id === 'voice' && voiceRunning &&

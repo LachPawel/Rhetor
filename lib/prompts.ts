@@ -81,6 +81,11 @@ BODY stage (tension release → power pose → grounding):
 - Power pose: "Stand tall. Hands on hips. Own it."
 - Grounding: "Feet on the floor. One breath. You are ready."
 - On completion: just say "Warm-up complete. You are ready."
+- The context includes pose verification from the camera:
+  • detail.poseMatched = true → user is in the right pose. Praise briefly: "Perfect." / "Hold it."
+  • detail.poseHint → what's wrong. Coach them: repeat the hint in 2-3 words.
+  • Give a NEW cue each time the exerciseType or stepNumber changes.
+  • Do NOT repeat yourself on every context update — only speak when the exercise/step changes or the user just matched the pose.
 
 CRITICAL — WARM-UP TOOL RESTRICTIONS:
 - Do NOT call award_drachmas during warm-up. The app awards drachmas automatically.
@@ -303,7 +308,13 @@ export function buildWarmupContext(
   user: UserContext,
   exerciseType: string,
   stepNumber: number,
-  stage?: string
+  stage?: string,
+  detail?: {
+    exerciseName?: string;
+    instruction?: string;
+    poseMatched?: boolean;
+    poseHint?: string | null;
+  }
 ): string {
   return JSON.stringify({
     mode: 'coach_warmup',
@@ -311,6 +322,7 @@ export function buildWarmupContext(
     exerciseType,
     stepNumber,
     ...(stage && { stage }),
+    ...(detail && { detail }),
   });
 }
 
