@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Activity,
   ArrowLeft,
   Check,
   ChevronLeft,
@@ -28,6 +29,7 @@ import {
   isSupportedDeckFile,
 } from '../lib/pitch_deck.ts';
 import { PostureDetector, PostureFrame } from '../lib/posture_detector.ts';
+import { PostureSkeleton } from './PostureSkeleton.tsx';
 
 interface ViewPracticeProps {
   onEnd: (result: SessionResult) => void;
@@ -548,6 +550,18 @@ export const ViewPractice: React.FC<ViewPracticeProps> = ({ onEnd }) => {
           </div>
           <div className="w-px h-4 bg-stone-200" />
           <div className={`text-sm font-mono ${getWpmColor(liveWpm)}`}>{liveWpm > 0 ? `${liveWpm} wpm` : '— wpm'}</div>
+          <div className="w-px h-4 bg-stone-200" />
+          <div className={`text-sm font-mono ${
+            postureFrame
+              ? (postureFrame.calibrating ? 'text-stone-400' : postureFrame.score >= 80 ? 'text-emerald-600' : postureFrame.score >= 50 ? 'text-amber-500' : 'text-red-500')
+              : 'text-stone-400'
+          }`}>
+            {postureFrame
+              ? (postureFrame.calibrating
+                ? `Calibrating… ${postureFrame.calibrationProgress}/40`
+                : `${postureFrame.score}% posture`)
+              : (postureReady ? 'Detecting…' : 'Loading AI…')}
+          </div>
           <div className={`text-xl font-mono ${timeLeft <= 10 ? 'text-amber-600' : 'text-stone-900'}`}>
             {Math.floor(timeLeft / 60)}:{(timeLeft % 60).toString().padStart(2, '0')}
           </div>
@@ -565,6 +579,28 @@ export const ViewPractice: React.FC<ViewPracticeProps> = ({ onEnd }) => {
           <div className="w-full aspect-video bg-black rounded-sm overflow-hidden relative shadow-2xl">
             {stream && (
               <video ref={videoRef} autoPlay playsInline muted className="absolute inset-0 w-full h-full object-cover transform -scale-x-100" />
+            )}
+
+            {/* POSTURE SKELETON OVERLAY */}
+            {showSkeleton && postureFrame && videoDimensions.width > 0 && (
+              <PostureSkeleton
+                keypoints={postureFrame.keypoints}
+                videoWidth={videoDimensions.width}
+                videoHeight={videoDimensions.height}
+                score={postureFrame.score}
+              />
+            )}
+
+            {/* POSTURE TIP / CALIBRATION BADGE */}
+            {postureFrame?.calibrating && (
+              <div className="absolute top-3 left-1/2 -translate-x-1/2 z-20 bg-black/60 backdrop-blur-sm text-white/70 text-xs font-mono px-4 py-1.5 rounded-full tracking-wider">
+                Hold good posture — calibrating…
+              </div>
+            )}
+            {!postureFrame?.calibrating && postureFrame?.tip && (
+              <div className="absolute top-3 left-1/2 -translate-x-1/2 z-20 bg-black/70 backdrop-blur-sm text-white text-xs font-mono px-4 py-1.5 rounded-full tracking-wider animate-pulse">
+                {postureFrame.tip}
+              </div>
             )}
 
             {/* TELEPROMPTER OVERLAY */}
@@ -782,6 +818,13 @@ export const ViewPractice: React.FC<ViewPracticeProps> = ({ onEnd }) => {
             title="Toggle transcript"
           >
             <MessageSquare className="w-4 h-4" />
+          </button>
+          <button
+            onClick={() => setShowSkeleton(!showSkeleton)}
+            className={`transition-colors ${showSkeleton ? 'text-emerald-600' : 'text-stone-400 hover:text-stone-900'}`}
+            title="Toggle posture skeleton"
+          >
+            <Activity className="w-4 h-4" />
           </button>
           <button
             onClick={() => deckInputRef.current?.click()}
