@@ -66,9 +66,11 @@ export const ViewAgora: React.FC<ViewAgoraProps> = ({ onSelectLesson }) => {
 
                     <div className="pl-6 space-y-4 border-l border-stone-200 ml-1.5">
                         {skills.map((skill, idx) => {
-                            const isCompleted = user.completedLessons.includes(skill.id);
-                            // Only Kill the Fillers is unlocked — all others are locked
-                            const isLocked = skill.id !== 'kill-the-fillers';
+                            // Kill the Fillers is always playable & never shown as completed
+                            // Belly Breathing is explicitly locked/disabled
+                            const isKillFillers = skill.id === 'kill-the-fillers';
+                            const isLocked = !isKillFillers;
+                            const isCompleted = !isKillFillers && user.completedLessons.includes(skill.id);
 
                             return (
                                 <button 
