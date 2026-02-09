@@ -185,6 +185,7 @@ interface PitchSlice {
   clearPitchDeck: () => void;
   setCurrentDeckSlide: (slideNumber: number) => void;
   resetDeckNavigationEvents: () => void;
+  clearPitch: () => void;
 }
 
 interface UISlice {
@@ -749,6 +750,19 @@ export const useRhetorStore = create<RhetorStore>()(
               timestamp: Date.now(),
             });
           }
+        });
+      },
+
+      clearPitch: () => {
+        set((state) => {
+          state.talkingPoints = [];
+          state.pitchTopic = '';
+          state.pitchHook = '';
+          state.pitchClosing = '';
+          state.suggestedDuration = 60;
+          state.pitchDeck = null;
+          state.currentDeckSlide = 1;
+          state.deckNavigationEvents = [];
         });
       },
 

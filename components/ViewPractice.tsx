@@ -8,8 +8,6 @@ import {
   Eye,
   EyeOff,
   MessageSquare,
-  Trash2,
-  Upload,
 } from 'lucide-react';
 import { FadeTransition } from './FadeTransition.tsx';
 import { SessionResult, AgentMode } from '../types.ts';
@@ -18,15 +16,11 @@ import { useRhetorStore } from '../stores/useRhetorStore.ts';
 import { createTeleprompterMatcher } from '../src/lib/teleprompter_matcher.ts';
 import {
   buildDeckPreviewUrl,
-  createPitchDeckAsset,
-  DECK_FILE_ACCEPT,
-  disposePitchDeckAsset,
   isImageDeck,
   isPowerPointDeck,
   isPptxDeck,
   isPdfDeck,
   renderPptxSlidesFromBuffer,
-  isSupportedDeckFile,
 } from '../lib/pitch_deck.ts';
 import { PostureDetector, PostureFrame } from '../lib/posture_detector.ts';
 import { PostureSkeleton } from './PostureSkeleton.tsx';
@@ -59,8 +53,6 @@ export const ViewPractice: React.FC<ViewPracticeProps> = ({ onEnd }) => {
 
   const pitchDeck = useRhetorStore((s) => s.pitchDeck);
   const currentDeckSlide = useRhetorStore((s) => s.currentDeckSlide);
-  const setPitchDeck = useRhetorStore((s) => s.setPitchDeck);
-  const clearPitchDeck = useRhetorStore((s) => s.clearPitchDeck);
   const setCurrentDeckSlide = useRhetorStore((s) => s.setCurrentDeckSlide);
 
   const [deckError, setDeckError] = useState<string | null>(null);
@@ -68,7 +60,6 @@ export const ViewPractice: React.FC<ViewPracticeProps> = ({ onEnd }) => {
   const duration = suggestedDuration > 0 ? suggestedDuration : 120;
   const [timeLeft, setTimeLeft] = useState(duration);
   const [stream, setStream] = useState<MediaStream | null>(null);
-  const deckInputRef = useRef<HTMLInputElement>(null);
   const pptxPreviewRef = useRef<HTMLDivElement>(null);
   const pptxBufferCacheRef = useRef(new Map<string, ArrayBuffer>());
   const [pptxViewport, setPptxViewport] = useState({ width: 0, height: 0 });
@@ -114,42 +105,6 @@ export const ViewPractice: React.FC<ViewPracticeProps> = ({ onEnd }) => {
     },
     [pitchDeck, isDeckPdf, isDeckPptx, maxDeckSlide, setCurrentDeckSlide],
   );
-
-  const handleDeckFileChange = useCallback(
-    async (event: React.ChangeEvent<HTMLInputElement>) => {
-      const file = event.target.files?.[0];
-      event.target.value = '';
-      if (!file) return;
-
-      if (!isSupportedDeckFile(file)) {
-        setDeckError('Please upload a PDF, PowerPoint, or image file.');
-        return;
-      }
-
-      setDeckError(null);
-      try {
-        const nextDeck = await createPitchDeckAsset(file);
-        disposePitchDeckAsset(pitchDeck);
-        if (pitchDeck?.objectUrl) {
-          pptxBufferCacheRef.current.delete(pitchDeck.objectUrl);
-        }
-        setPitchDeck(nextDeck);
-      } catch (error) {
-        console.error('[ViewPractice] Deck upload failed:', error);
-        setDeckError('Could not load the deck. Try another PDF, PowerPoint, or image.');
-      }
-    },
-    [pitchDeck, setPitchDeck],
-  );
-
-  const handleRemoveDeck = useCallback(() => {
-    disposePitchDeckAsset(pitchDeck);
-    if (pitchDeck?.objectUrl) {
-      pptxBufferCacheRef.current.delete(pitchDeck.objectUrl);
-    }
-    clearPitchDeck();
-    setDeckError(null);
-  }, [pitchDeck, clearPitchDeck]);
 
   useEffect(() => {
     setRenderedPptxHtmlSlides([]);
@@ -523,13 +478,6 @@ export const ViewPractice: React.FC<ViewPracticeProps> = ({ onEnd }) => {
 
   return (
     <FadeTransition className="flex flex-col min-h-screen p-6 relative bg-stone-50 text-stone-900">
-      <input
-        ref={deckInputRef}
-        type="file"
-        accept={DECK_FILE_ACCEPT}
-        onChange={handleDeckFileChange}
-        className="hidden"
-      />
 
       <div className="flex justify-between items-start w-full mb-4 z-10">
         <div className="flex items-center gap-3">
@@ -826,22 +774,6 @@ export const ViewPractice: React.FC<ViewPracticeProps> = ({ onEnd }) => {
           >
             <Activity className="w-4 h-4" />
           </button>
-          <button
-            onClick={() => deckInputRef.current?.click()}
-            className="text-stone-400 hover:text-stone-900 transition-colors"
-            title={hasDeck ? 'Replace deck' : 'Add deck'}
-          >
-            <Upload className="w-4 h-4" />
-          </button>
-          {hasDeck && (
-            <button
-              onClick={handleRemoveDeck}
-              className="text-stone-400 hover:text-rose-600 transition-colors"
-              title="Remove deck"
-            >
-              <Trash2 className="w-4 h-4" />
-            </button>
-          )}
         </div>
         <button
           onClick={finishSession}

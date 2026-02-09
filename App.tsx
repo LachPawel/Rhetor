@@ -81,6 +81,13 @@ const AppContent: React.FC = () => {
       setCurrentView(AppView.REVIEW);
   };
 
+  const handleReviewReset = () => {
+      useRhetorStore.getState().clearSession();
+      useRhetorStore.getState().clearPitch();
+      setSessionResult(null);
+      setCurrentView(AppView.HOME);
+  };
+
   return (
     <main className="min-h-screen bg-stone-50 text-stone-900 font-sans selection:bg-stone-200 overflow-hidden relative">
         <ConnectionStatusBar />
@@ -129,7 +136,7 @@ const AppContent: React.FC = () => {
             )}
             
             {currentView === AppView.REVIEW && (
-                <ViewReview key="review" result={sessionResult} onReset={() => setCurrentView(AppView.HOME)} />
+                <ViewReview key="review" result={sessionResult} onReset={handleReviewReset} />
             )}
 
             {currentView === AppView.KILL_FILLERS && (
