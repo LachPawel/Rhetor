@@ -6,6 +6,8 @@ import { useRhetor } from '../contexts/RhetorContext.tsx';
 import { X, Mic, Wind, Ear, ChevronRight, CheckCircle2, Coins, ArrowRight, RotateCcw } from 'lucide-react';
 import { getLessonById, lessons, type Lesson as AcademyLesson, type LessonStep } from '../src/data/lessons.ts';
 
+import { ViewKillFillers } from './ViewKillFillers.tsx';
+
 // ─── Props ───────────────────────────────────────────────────────────
 interface ViewLessonProps {
   lesson: LegacyLesson;
@@ -55,6 +57,11 @@ const StepIcon: React.FC<{ step: LessonStep; isSpeaking: boolean; className?: st
 // MAIN COMPONENT
 // ═════════════════════════════════════════════════════════════════════
 export const ViewLesson: React.FC<ViewLessonProps> = ({ lesson, onExit, onNextLesson }) => {
+  // SPECIAL CASE: Kill the Fillers has its own custom game view
+  if (lesson.id === 'kill-the-fillers') {
+    return <ViewKillFillers onExit={onExit} />;
+  }
+
   const { setMode, isConnected, connect, isSpeaking, aiResponse, user, addDrachmas, completeLesson: markComplete } = useRhetor();
 
   // Look up the full academy lesson by ID
