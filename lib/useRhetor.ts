@@ -274,35 +274,52 @@ export function useRhetor(options: UseRhetorOptions): UseRhetorReturn {
       outputAudioTranscription: {},
     });
     
-    // Auto-start microphone after successful connection
-    if (success) {
-      // Small delay to ensure connection is fully established
-      setTimeout(async () => {
+    // Start microphone if we just connected OR if already connected
+    // (handles the case where client.connect() returns false because it's
+    // already connected, but the mic isn't running — e.g. after reconnect)
+    const isNowConnected = success || (clientRef.current?.isConnected ?? false);
+    if (isNowConnected) {
+      // Start microphone immediately (no timeout) to preserve user gesture context
+      // which is often required to resume/start AudioContext on webkit browsers.
+      (async () => {
         try {
-          // Create recorder if needed
-          if (!recorderRef.current) {
-            recorderRef.current = new AudioRecorder(MIC_SAMPLE_RATE);
-            
-            recorderRef.current.on('data', (base64: string) => {
-              clientRef.current?.sendRealtimeInput([{
-                mimeType: 'audio/pcm;rate=16000',
-                data: base64,
-              }]);
-            });
-            
-            recorderRef.current.on('volume', (vol: number) => {
-              setVolume(vol);
-            });
+          // If recorder exists but isn't recording, tear it down so we get a fresh one
+          if (recorderRef.current && !recorderRef.current.recording) {
+            recorderRef.current.stop();
+            recorderRef.current = null;
           }
           
+          // Skip if mic is already running
+          if (recorderRef.current?.recording) {
+            console.log('[useRhetor] Mic already running, skipping start');
+            setIsListening(true);
+            setIsListeningStore(true);
+            return;
+          }
+          
+          // Create fresh recorder
+          recorderRef.current = new AudioRecorder(MIC_SAMPLE_RATE);
+          
+          recorderRef.current.on('data', (base64: string) => {
+            clientRef.current?.sendRealtimeInput([{
+              mimeType: 'audio/pcm;rate=16000',
+              data: base64,
+            }]);
+          });
+          
+          recorderRef.current.on('volume', (vol: number) => {
+            setVolume(vol);
+          });
+          
           await recorderRef.current.start();
+          console.log('[useRhetor] Microphone started successfully');
           setIsListening(true);
           setIsListeningStore(true);
         } catch (e) {
           console.error('[useRhetor] Error starting microphone:', e);
           setError(e instanceof Error ? e.message : 'Microphone access denied');
         }
-      }, 100);
+      })();
     }
     
     return success;
@@ -310,7 +327,10 @@ export function useRhetor(options: UseRhetorOptions): UseRhetorReturn {
   
   const disconnect = useCallback(() => {
     clientRef.current?.disconnect();
-    recorderRef.current?.stop();
+    if (recorderRef.current) {
+      recorderRef.current.stop();
+      recorderRef.current = null;  // Force fresh recorder on next connect
+    }
     setIsListening(false);
     setIsListeningStore(false);
   }, [setIsListeningStore]);

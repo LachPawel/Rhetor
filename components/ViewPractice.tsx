@@ -195,8 +195,12 @@ export const ViewPractice: React.FC<ViewPracticeProps> = ({ onEnd }) => {
     }
   }, [stream]);
 
-  // ── Posture detector lifecycle ──────────────────────────────────
+  // ── Posture detector lifecycle (deferred until Gemini is connected) ──
   useEffect(() => {
+    // Wait until the AI connection + mic are established before loading
+    // TensorFlow.js — the heavy GPU init can interfere with audio setup.
+    if (!isConnected) return;
+
     let cancelled = false;
     const detector = new PostureDetector({
       intervalMs: 300,
@@ -209,19 +213,24 @@ export const ViewPractice: React.FC<ViewPracticeProps> = ({ onEnd }) => {
     });
     postureDetectorRef.current = detector;
 
-    detector.init().then(() => {
+    // Extra 2 s delay so the mic/audio pipeline is fully warmed up
+    const initTimer = setTimeout(() => {
       if (cancelled) return;
-      setPostureReady(true);
-      console.log('[ViewPractice] PostureDetector ready');
-    }).catch((err) => {
-      console.warn('[ViewPractice] PostureDetector init failed:', err);
-    });
+      detector.init().then(() => {
+        if (cancelled) return;
+        setPostureReady(true);
+        console.log('[ViewPractice] PostureDetector ready');
+      }).catch((err) => {
+        console.warn('[ViewPractice] PostureDetector init failed:', err);
+      });
+    }, 2000);
 
     return () => {
       cancelled = true;
+      clearTimeout(initTimer);
       detector.dispose();
     };
-  }, []);
+  }, [isConnected]);   // only fire once connection is up
 
   // Start posture detection once both detector and video are ready
   useEffect(() => {
@@ -304,7 +313,7 @@ export const ViewPractice: React.FC<ViewPracticeProps> = ({ onEnd }) => {
   }, [lastTranscript]);
 
   return (
-    <FadeTransition className="flex flex-col min-h-screen p-6 relative bg-stone-50 text-stone-900">
+    <FadeTransition className="flex flex-col h-screen p-6 relative bg-stone-50 text-stone-900 overflow-hidden">
       <div className="flex justify-between items-start w-full mb-4 z-10">
         <div className="flex items-center gap-3">
           <button onClick={finishSession} className="text-stone-400 hover:text-stone-900 transition-colors">
@@ -340,8 +349,8 @@ export const ViewPractice: React.FC<ViewPracticeProps> = ({ onEnd }) => {
         </div>
       </div>
       
-      <div className="flex-1 flex items-center justify-center relative w-full">
-        <div className="w-full aspect-video max-w-4xl bg-black rounded-sm overflow-hidden relative shadow-2xl">
+      <div className="flex-1 flex items-center justify-center relative w-full min-h-0">
+        <div className="w-full max-w-4xl max-h-full bg-black rounded-sm overflow-hidden relative shadow-2xl" style={{ aspectRatio: '16/9' }}>
           {stream && <video ref={videoRef} autoPlay playsInline muted className="absolute inset-0 w-full h-full object-cover transform -scale-x-100" />}
 
           {/* POSTURE SKELETON OVERLAY */}
@@ -418,7 +427,7 @@ export const ViewPractice: React.FC<ViewPracticeProps> = ({ onEnd }) => {
       
       {/* Coach Feedback Floating — positioned between video and transcript */}
       {lastCoachMessage && !isSpeaking && (
-        <div className="w-full max-w-4xl mx-auto mt-3 flex justify-center z-10">
+        <div className="w-full max-w-4xl mx-auto mt-2 flex justify-center z-10 shrink-0">
           <div className="bg-white/90 backdrop-blur px-6 py-3 rounded-full border border-stone-200 text-stone-900 text-base serif italic shadow-lg max-w-xl truncate">
             "{lastCoachMessage}"
           </div>
@@ -427,7 +436,7 @@ export const ViewPractice: React.FC<ViewPracticeProps> = ({ onEnd }) => {
 
       {/* ── LIVE TRANSCRIPT PANEL ──────────────────────────────────── */}
       {showTranscript && (
-        <div className="w-full max-w-4xl mx-auto mt-4 z-10">
+        <div className="w-full max-w-4xl mx-auto mt-2 z-10 shrink-0">
           <div className="bg-white/80 backdrop-blur border border-stone-200 rounded-lg shadow-sm overflow-hidden">
             <div className="px-4 py-2 border-b border-stone-100 flex items-center justify-between">
               <span className="text-xs font-mono text-stone-400 uppercase tracking-widest">
@@ -449,7 +458,7 @@ export const ViewPractice: React.FC<ViewPracticeProps> = ({ onEnd }) => {
         </div>
       )}
 
-      <div className="mt-8 flex justify-between items-center z-10 w-full max-w-4xl mx-auto">
+      <div className="mt-3 flex justify-between items-center z-10 w-full max-w-4xl mx-auto shrink-0">
         <div className="flex items-center gap-6">
             {talkingPoints.length > 0 && (
                 <button onClick={() => setShowPrompter(!showPrompter)} className="text-stone-400 hover:text-stone-900 transition-colors" title="Toggle prompter">

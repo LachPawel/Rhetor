@@ -6,7 +6,7 @@
  */
 
 import React, { useEffect, useRef } from 'react';
-import type { Keypoint } from '@tensorflow-models/pose-detection';
+import type { Keypoint } from '../lib/posture_detector.ts';
 import { SKELETON_EDGES, FACE_KEYPOINT_IDS } from '../lib/posture_detector.ts';
 
 interface PostureSkeletonProps {

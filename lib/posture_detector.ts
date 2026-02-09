@@ -6,8 +6,18 @@
  * baseline with configurable sensitivity thresholds.
  */
 
-import * as poseDetection from '@tensorflow-models/pose-detection';
-import * as tf from '@tensorflow/tfjs';
+// Dynamic imports — loaded lazily in init() to avoid bloating the main bundle
+// and prevent GPU/WebGL contention with the Gemini audio pipeline on startup.
+let poseDetection: typeof import('@tensorflow-models/pose-detection');
+let tf: typeof import('@tensorflow/tfjs');
+
+/** Keypoint shape re-exported so consumers don't need the heavy import */
+export interface Keypoint {
+  x: number;
+  y: number;
+  score?: number;
+  name?: string;
+}
 
 // ── Keypoint indices (COCO 17-keypoint topology used by MoveNet) ───────────
 export const KEYPOINT = {
@@ -78,7 +88,7 @@ export interface PostureFrame {
   /** Human-readable actionable tip, e.g. "Shoulders back!" */
   tip: string | null;
   /** Raw keypoints for skeleton drawing */
-  keypoints: poseDetection.Keypoint[];
+  keypoints: Keypoint[];
   /** Whether the detector is still calibrating */
   calibrating: boolean;
   /** Calibration progress 0–40 */
@@ -111,7 +121,7 @@ const DEFAULT_CONFIG: Required<PostureDetectorConfig> = {
 
 // ── Posture Detector Class ─────────────────────────────────────────────────
 export class PostureDetector {
-  private detector: poseDetection.PoseDetector | null = null;
+  private detector: any | null = null;  // poseDetection.PoseDetector — loaded dynamically
   private config: Required<PostureDetectorConfig>;
   private video: HTMLVideoElement | null = null;
   private timerId: ReturnType<typeof setTimeout> | null = null;
@@ -144,6 +154,12 @@ export class PostureDetector {
   /** Initialize TF backend and load MoveNet SinglePose Lightning */
   async init(): Promise<void> {
     if (this._ready) return;
+
+    // Lazy-load TF.js + pose-detection only when needed
+    [tf, poseDetection] = await Promise.all([
+      import('@tensorflow/tfjs'),
+      import('@tensorflow-models/pose-detection'),
+    ]);
 
     await tf.setBackend('webgl');
     await tf.ready();
@@ -236,7 +252,7 @@ export class PostureDetector {
   }
 
   // ── Keypoint helper ──────────────────────────────────────────────────────
-  private kp(keypoints: poseDetection.Keypoint[], idx: number) {
+  private kp(keypoints: Keypoint[], idx: number) {
     const k = keypoints[idx];
     return k && (k.score ?? 0) >= this.config.minKeypointScore ? k : null;
   }
@@ -252,7 +268,7 @@ export class PostureDetector {
   }
 
   // ── Core analysis ────────────────────────────────────────────────────────
-  private analyzePosture(keypoints: poseDetection.Keypoint[]): PostureFrame {
+  private analyzePosture(keypoints: Keypoint[]): PostureFrame {
     this.frameCounter++;
 
     const lShoulder = this.kp(keypoints, KEYPOINT.LEFT_SHOULDER);

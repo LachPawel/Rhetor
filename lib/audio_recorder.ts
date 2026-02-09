@@ -102,11 +102,17 @@ export class AudioRecorder {
 
   stop() {
     const handleStop = () => {
+      this.recording = false;
       this.source?.disconnect();
       this.stream?.getTracks().forEach(track => track.stop());
       this.stream = undefined;
       this.recordingWorklet = undefined;
       this.vuWorklet = undefined;
+      // Close the AudioContext to prevent leaking contexts
+      if (this.audioContext && this.audioContext.state !== 'closed') {
+        this.audioContext.close().catch(() => {});
+      }
+      this.audioContext = undefined;
     };
     if (this.starting) {
       this.starting.then(handleStop);
