@@ -1,13 +1,33 @@
-
-import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { ArrowLeft, Check, Eye, EyeOff, MessageSquare, Activity } from 'lucide-react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  ArrowLeft,
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  Eye,
+  EyeOff,
+  MessageSquare,
+  Trash2,
+  Upload,
+} from 'lucide-react';
 import { FadeTransition } from './FadeTransition.tsx';
 import { SessionResult, AgentMode } from '../types.ts';
 import { useRhetor } from '../contexts/RhetorContext.tsx';
 import { useRhetorStore } from '../stores/useRhetorStore.ts';
 import { createTeleprompterMatcher } from '../src/lib/teleprompter_matcher.ts';
-import { PostureDetector, type PostureFrame } from '../lib/posture_detector.ts';
-import { PostureSkeleton } from './PostureSkeleton.tsx';
+import {
+  buildDeckPreviewUrl,
+  createPitchDeckAsset,
+  DECK_FILE_ACCEPT,
+  disposePitchDeckAsset,
+  isImageDeck,
+  isPowerPointDeck,
+  isPptxDeck,
+  isPdfDeck,
+  renderPptxSlidesFromBuffer,
+  isSupportedDeckFile,
+} from '../lib/pitch_deck.ts';
+import { PostureDetector, PostureFrame } from '../lib/posture_detector.ts';
 
 interface ViewPracticeProps {
   onEnd: (result: SessionResult) => void;
@@ -20,6 +40,11 @@ const getWpmColor = (wpm: number): string => {
   return 'text-red-500';
 };
 
+const snapPreviewDimension = (value: number): number => {
+  const snapped = Math.round(value / 4) * 4;
+  return Math.max(1, snapped);
+};
+
 export const ViewPractice: React.FC<ViewPracticeProps> = ({ onEnd }) => {
   const { setMode, isConnected, isSpeaking, talkingPoints, aiResponse, lastTranscript, resetTranscript } = useRhetor();
   const startSession = useRhetorStore((s) => s.startSession);
@@ -29,11 +54,203 @@ export const ViewPractice: React.FC<ViewPracticeProps> = ({ onEnd }) => {
   const recentFillerWord = useRhetorStore((s) => s.recentFillerWord);
   const setNavigationBlocked = useRhetorStore((s) => s.setNavigationBlocked);
   const suggestedDuration = useRhetorStore((s) => s.suggestedDuration);
-  const teleprompterAdvanceCounter = useRhetorStore((s) => s.teleprompterAdvanceCounter);
+
+  const pitchDeck = useRhetorStore((s) => s.pitchDeck);
+  const currentDeckSlide = useRhetorStore((s) => s.currentDeckSlide);
+  const setPitchDeck = useRhetorStore((s) => s.setPitchDeck);
+  const clearPitchDeck = useRhetorStore((s) => s.clearPitchDeck);
+  const setCurrentDeckSlide = useRhetorStore((s) => s.setCurrentDeckSlide);
+
+  const [deckError, setDeckError] = useState<string | null>(null);
   const [fillerFlash, setFillerFlash] = useState(false);
   const duration = suggestedDuration > 0 ? suggestedDuration : 120;
   const [timeLeft, setTimeLeft] = useState(duration);
   const [stream, setStream] = useState<MediaStream | null>(null);
+  const deckInputRef = useRef<HTMLInputElement>(null);
+  const pptxPreviewRef = useRef<HTMLDivElement>(null);
+  const pptxBufferCacheRef = useRef(new Map<string, ArrayBuffer>());
+  const [pptxViewport, setPptxViewport] = useState({ width: 0, height: 0 });
+  const [renderedPptxHtmlSlides, setRenderedPptxHtmlSlides] = useState<string[]>([]);
+  const [isPptxRendering, setIsPptxRendering] = useState(false);
+
+  const hasDeck = Boolean(pitchDeck);
+  const isDeckPdf = isPdfDeck(pitchDeck);
+  const isDeckImage = isImageDeck(pitchDeck);
+  const isDeckPowerPoint = isPowerPointDeck(pitchDeck);
+  const isDeckPptx = isPptxDeck(pitchDeck);
+  const pptxTextSlides = isDeckPptx ? pitchDeck?.slideTexts ?? [] : [];
+  const cachedPptxHtmlSlides = isDeckPptx ? pitchDeck?.slideHtml ?? [] : [];
+  const activePptxHtmlSlides = renderedPptxHtmlSlides.length > 0 ? renderedPptxHtmlSlides : cachedPptxHtmlSlides;
+  const pptxSlideCount = Math.max(
+    pitchDeck?.totalSlides ?? 0,
+    activePptxHtmlSlides.length,
+    pptxTextSlides.length,
+  );
+  const currentPptxSlideIndex = Math.max(0, Math.min(currentDeckSlide, Math.max(pptxSlideCount, 1)) - 1);
+  const maxDeckSlide = isDeckPdf
+    ? pitchDeck?.totalSlides ?? null
+    : isDeckPptx
+      ? (pptxSlideCount > 0 ? pptxSlideCount : null)
+      : null;
+  const canGoToNextSlide =
+    (isDeckPdf && (maxDeckSlide ? currentDeckSlide < maxDeckSlide : true)) ||
+    (isDeckPptx && maxDeckSlide !== null && currentDeckSlide < maxDeckSlide);
+  const canGoToPrevSlide = (isDeckPdf || isDeckPptx) && currentDeckSlide > 1;
+  const layoutMaxWidthClass = hasDeck ? 'max-w-7xl' : 'max-w-4xl';
+
+  const deckPreviewUrl = useMemo(() => {
+    if (!pitchDeck) return '';
+    return buildDeckPreviewUrl(pitchDeck, currentDeckSlide);
+  }, [pitchDeck, currentDeckSlide]);
+
+  const jumpToSlide = useCallback(
+    (slideNumber: number) => {
+      if (!pitchDeck || (!isDeckPdf && !isDeckPptx)) return;
+      const upperBound = maxDeckSlide ?? (isDeckPdf ? Number.POSITIVE_INFINITY : 1);
+      const nextSlide = Math.max(1, Math.min(Math.floor(slideNumber), upperBound));
+      setCurrentDeckSlide(nextSlide);
+    },
+    [pitchDeck, isDeckPdf, isDeckPptx, maxDeckSlide, setCurrentDeckSlide],
+  );
+
+  const handleDeckFileChange = useCallback(
+    async (event: React.ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0];
+      event.target.value = '';
+      if (!file) return;
+
+      if (!isSupportedDeckFile(file)) {
+        setDeckError('Please upload a PDF, PowerPoint, or image file.');
+        return;
+      }
+
+      setDeckError(null);
+      try {
+        const nextDeck = await createPitchDeckAsset(file);
+        disposePitchDeckAsset(pitchDeck);
+        if (pitchDeck?.objectUrl) {
+          pptxBufferCacheRef.current.delete(pitchDeck.objectUrl);
+        }
+        setPitchDeck(nextDeck);
+      } catch (error) {
+        console.error('[ViewPractice] Deck upload failed:', error);
+        setDeckError('Could not load the deck. Try another PDF, PowerPoint, or image.');
+      }
+    },
+    [pitchDeck, setPitchDeck],
+  );
+
+  const handleRemoveDeck = useCallback(() => {
+    disposePitchDeckAsset(pitchDeck);
+    if (pitchDeck?.objectUrl) {
+      pptxBufferCacheRef.current.delete(pitchDeck.objectUrl);
+    }
+    clearPitchDeck();
+    setDeckError(null);
+  }, [pitchDeck, clearPitchDeck]);
+
+  useEffect(() => {
+    setRenderedPptxHtmlSlides([]);
+    setIsPptxRendering(false);
+  }, [pitchDeck?.objectUrl]);
+
+  useEffect(() => {
+    if (!isDeckPptx) return;
+    const target = pptxPreviewRef.current;
+    if (!target) return;
+
+    const updateViewport = (width: number, height: number) => {
+      const nextWidth = snapPreviewDimension(width);
+      const nextHeight = snapPreviewDimension(height);
+      setPptxViewport((prev) => {
+        if (prev.width === nextWidth && prev.height === nextHeight) {
+          return prev;
+        }
+        return { width: nextWidth, height: nextHeight };
+      });
+    };
+
+    updateViewport(target.clientWidth, target.clientHeight);
+
+    const observer = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      if (!entry) return;
+      updateViewport(entry.contentRect.width, entry.contentRect.height);
+    });
+
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [isDeckPptx, pitchDeck?.objectUrl]);
+
+  useEffect(() => {
+    if (!isDeckPptx || !pitchDeck?.objectUrl) return;
+    if (pptxViewport.width <= 0 || pptxViewport.height <= 0) return;
+
+    let cancelled = false;
+
+    const renderForViewport = async () => {
+      setIsPptxRendering(true);
+      try {
+        let raw = pptxBufferCacheRef.current.get(pitchDeck.objectUrl);
+        if (!raw) {
+          const response = await fetch(pitchDeck.objectUrl);
+          if (!response.ok) {
+            throw new Error(`Failed to fetch uploaded PPTX (${response.status})`);
+          }
+          raw = await response.arrayBuffer();
+          pptxBufferCacheRef.current.set(pitchDeck.objectUrl, raw);
+        }
+
+        const slides = await renderPptxSlidesFromBuffer(raw, {
+          width: pptxViewport.width,
+          height: pptxViewport.height,
+          scaleToFit: true,
+          letterbox: true,
+        });
+
+        if (cancelled) return;
+        setRenderedPptxHtmlSlides(slides ?? []);
+      } catch (error) {
+        if (!cancelled) {
+          console.error('[ViewPractice] Could not render PPTX for preview viewport:', error);
+          setRenderedPptxHtmlSlides([]);
+        }
+      } finally {
+        if (!cancelled) {
+          setIsPptxRendering(false);
+        }
+      }
+    };
+
+    void renderForViewport();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isDeckPptx, pitchDeck?.objectUrl, pptxViewport.width, pptxViewport.height]);
+
+  useEffect(() => {
+    if (!pitchDeck || (!isDeckPdf && !isDeckPptx)) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      const tagName = target?.tagName?.toLowerCase();
+      if (tagName === 'input' || tagName === 'textarea' || target?.isContentEditable) {
+        return;
+      }
+
+      if (event.key === 'ArrowLeft') {
+        event.preventDefault();
+        jumpToSlide(currentDeckSlide - 1);
+      } else if (event.key === 'ArrowRight') {
+        event.preventDefault();
+        jumpToSlide(currentDeckSlide + 1);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [pitchDeck, isDeckPdf, isDeckPptx, currentDeckSlide, jumpToSlide]);
 
   // ── Posture detection state ──────────────────────────────────
   const postureDetectorRef = useRef<PostureDetector | null>(null);
@@ -45,7 +262,7 @@ export const ViewPractice: React.FC<ViewPracticeProps> = ({ onEnd }) => {
 
   // ── Start metrics session on mount, enable nav guard ─────────────
   useEffect(() => {
-    resetTranscript();   // Clear stale transcript from previous sessions
+    resetTranscript(); // Clear stale transcript from previous sessions
     startSession();
     setNavigationBlocked(true);
     return () => {
@@ -58,7 +275,7 @@ export const ViewPractice: React.FC<ViewPracticeProps> = ({ onEnd }) => {
   const matcherRef = useRef(createTeleprompterMatcher());
   const prevTranscriptLenRef = useRef(0);
   const [allCovered, setAllCovered] = useState(false);
-  
+
   // Flash animation when a new filler is detected
   useEffect(() => {
     if (recentFillerWord) {
@@ -72,7 +289,7 @@ export const ViewPractice: React.FC<ViewPracticeProps> = ({ onEnd }) => {
   const [lastCoachMessage, setLastCoachMessage] = useState<string | null>(null);
   const prevSpeakingRef = useRef(isSpeaking);
   useEffect(() => {
-    // When AI stops speaking (transition from speaking → not speaking), snapshot the response
+    // When AI stops speaking (transition from speaking -> not speaking), snapshot the response
     if (prevSpeakingRef.current && !isSpeaking && aiResponse) {
       // Strip any ctrl tokens that may have leaked through
       const clean = aiResponse.replace(/<\/?ctrl\d+>/gi, '').trim();
@@ -80,7 +297,7 @@ export const ViewPractice: React.FC<ViewPracticeProps> = ({ onEnd }) => {
     }
     prevSpeakingRef.current = isSpeaking;
   }, [isSpeaking, aiResponse]);
-  
+
   // Stats Ref
   const statsRef = useRef({
     startTime: Date.now(),
@@ -108,9 +325,9 @@ export const ViewPractice: React.FC<ViewPracticeProps> = ({ onEnd }) => {
       console.log('[ViewPractice] Matcher initialized with', talkingPoints.length, 'bullets, transcript snap @', snapLen);
 
       matcher.onAdvance((newIndex: number) => {
-        console.log('[ViewPractice] onAdvance →', newIndex);
+        console.log('[ViewPractice] onAdvance ->', newIndex);
         // Only advance if matcher is ahead of (or equal to) current manual position
-        setPrompterIndex(prev => {
+        setPrompterIndex((prev) => {
           const next = Math.max(prev, newIndex);
           if (next >= talkingPoints.length - 1) {
             setAllCovered(true);
@@ -127,52 +344,42 @@ export const ViewPractice: React.FC<ViewPracticeProps> = ({ onEnd }) => {
     const prev = prevTranscriptLenRef.current;
     if (lastTranscript.length > prev) {
       const delta = lastTranscript.slice(prev);
-      console.log('[ViewPractice] Feeding delta to matcher:', delta.length, 'chars →', JSON.stringify(delta.slice(0, 120)));
+      console.log('[ViewPractice] Feeding delta to matcher:', delta.length, 'chars ->', JSON.stringify(delta.slice(0, 120)));
       matcherRef.current.feedTranscript(delta);
       prevTranscriptLenRef.current = lastTranscript.length;
     }
   }, [lastTranscript]);
 
-  // React to AI calling advance_teleprompter tool via Zustand store
-  const prevCounterRef = useRef(teleprompterAdvanceCounter);
-  useEffect(() => {
-    if (teleprompterAdvanceCounter > prevCounterRef.current && talkingPoints.length > 0) {
-      console.log('[ViewPractice] AI advance_teleprompter → counter', teleprompterAdvanceCounter);
-      prevCounterRef.current = teleprompterAdvanceCounter;
-      // Advance by 1 — same as handlePrompterClick
-      setPrompterIndex(prev => {
-        if (prev < talkingPoints.length - 1) {
-          const next = prev + 1;
-          if (next >= talkingPoints.length - 1) {
-            setAllCovered(true);
-          }
-          return next;
-        }
-        return prev;
-      });
-    }
-  }, [teleprompterAdvanceCounter, talkingPoints.length]);
-
-  // Set mode when connected — reset on disconnect so it re-fires after reconnection
+  // Set mode when connected - reset on disconnect so it re-fires after reconnection
   const modeSetRef = useRef(false);
   useEffect(() => {
     if (isConnected && !modeSetRef.current) {
       modeSetRef.current = true;
-      setMode(AgentMode.COACH_PRACTICE, { talkingPoints });
+      setMode(AgentMode.COACH_PRACTICE, {
+        talkingPoints,
+        pitchDeck: pitchDeck
+          ? {
+              fileName: pitchDeck.fileName,
+              totalSlides: pitchDeck.totalSlides,
+              currentSlide: currentDeckSlide,
+            }
+          : undefined,
+      });
     } else if (!isConnected) {
       modeSetRef.current = false;
     }
-  }, [isConnected, setMode, talkingPoints]);
-  
+  }, [isConnected, setMode, talkingPoints, pitchDeck, currentDeckSlide]);
+
   // Start local camera for self-view
   useEffect(() => {
     let localStream: MediaStream | null = null;
     let mounted = true;
 
-    navigator.mediaDevices.getUserMedia({ video: true })
-      .then(s => {
+    navigator.mediaDevices
+      .getUserMedia({ video: true })
+      .then((s) => {
         if (!mounted) {
-          s.getTracks().forEach(t => t.stop());
+          s.getTracks().forEach((t) => t.stop());
           return;
         }
         localStream = s;
@@ -183,7 +390,7 @@ export const ViewPractice: React.FC<ViewPracticeProps> = ({ onEnd }) => {
     return () => {
       mounted = false;
       if (localStream) {
-        localStream.getTracks().forEach(t => t.stop());
+        localStream.getTracks().forEach((t) => t.stop());
       }
     };
   }, []);
@@ -277,7 +484,7 @@ export const ViewPractice: React.FC<ViewPracticeProps> = ({ onEnd }) => {
       eyeContactScore: 0,
       fillersCount: useRhetorStore.getState().currentMetrics?.fillerCount ?? 0,
       wpm: useRhetorStore.getState().currentMetrics?.wpm ?? 0,
-      targetDurationSeconds: duration
+      targetDurationSeconds: duration,
     });
   }, [onEnd, duration, endSession]);
 
@@ -300,11 +507,11 @@ export const ViewPractice: React.FC<ViewPracticeProps> = ({ onEnd }) => {
   }, []);
 
   const handlePrompterClick = () => {
-      if (talkingPoints.length > 0) {
-          if (prompterIndex < talkingPoints.length - 1) {
-              setPrompterIndex(prev => prev + 1);
-          }
+    if (talkingPoints.length > 0) {
+      if (prompterIndex < talkingPoints.length - 1) {
+        setPrompterIndex((prev) => prev + 1);
       }
+    }
   };
 
   // Auto-scroll transcript to bottom as new words arrive
@@ -313,7 +520,15 @@ export const ViewPractice: React.FC<ViewPracticeProps> = ({ onEnd }) => {
   }, [lastTranscript]);
 
   return (
-    <FadeTransition className="flex flex-col h-screen p-6 relative bg-stone-50 text-stone-900 overflow-hidden">
+    <FadeTransition className="flex flex-col min-h-screen p-6 relative bg-stone-50 text-stone-900">
+      <input
+        ref={deckInputRef}
+        type="file"
+        accept={DECK_FILE_ACCEPT}
+        onChange={handleDeckFileChange}
+        className="hidden"
+      />
+
       <div className="flex justify-between items-start w-full mb-4 z-10">
         <div className="flex items-center gap-3">
           <button onClick={finishSession} className="text-stone-400 hover:text-stone-900 transition-colors">
@@ -333,50 +548,27 @@ export const ViewPractice: React.FC<ViewPracticeProps> = ({ onEnd }) => {
           </div>
           <div className="w-px h-4 bg-stone-200" />
           <div className={`text-sm font-mono ${getWpmColor(liveWpm)}`}>{liveWpm > 0 ? `${liveWpm} wpm` : '— wpm'}</div>
-          <div className="w-px h-4 bg-stone-200" />
-          <div className={`text-sm font-mono ${
-            postureFrame
-              ? (postureFrame.calibrating ? 'text-stone-400' : postureFrame.score >= 80 ? 'text-emerald-600' : postureFrame.score >= 50 ? 'text-amber-500' : 'text-red-500')
-              : 'text-stone-400'
-          }`}>
-            {postureFrame
-              ? (postureFrame.calibrating
-                ? `Calibrating… ${postureFrame.calibrationProgress}/40`
-                : `${postureFrame.score}% posture`)
-              : (postureReady ? 'Detecting…' : 'Loading AI…')}
+          <div className={`text-xl font-mono ${timeLeft <= 10 ? 'text-amber-600' : 'text-stone-900'}`}>
+            {Math.floor(timeLeft / 60)}:{(timeLeft % 60).toString().padStart(2, '0')}
           </div>
-          <div className={`text-xl font-mono ${timeLeft <= 10 ? 'text-amber-600' : 'text-stone-900'}`}>{Math.floor(timeLeft/60)}:{(timeLeft%60).toString().padStart(2,'0')}</div>
         </div>
       </div>
       
-      <div className="flex-1 flex items-center justify-center relative w-full min-h-0">
-        <div className="w-full max-w-4xl max-h-full bg-black rounded-sm overflow-hidden relative shadow-2xl" style={{ aspectRatio: '16/9' }}>
-          {stream && <video ref={videoRef} autoPlay playsInline muted className="absolute inset-0 w-full h-full object-cover transform -scale-x-100" />}
+      <div className="flex-1 flex items-center justify-center relative w-full">
+        <div
+          className={
+            hasDeck
+              ? `w-full ${layoutMaxWidthClass} mx-auto grid grid-cols-1 xl:grid-cols-2 gap-4 xl:gap-6`
+              : `w-full ${layoutMaxWidthClass} mx-auto`
+          }
+        >
+          <div className="w-full aspect-video bg-black rounded-sm overflow-hidden relative shadow-2xl">
+            {stream && (
+              <video ref={videoRef} autoPlay playsInline muted className="absolute inset-0 w-full h-full object-cover transform -scale-x-100" />
+            )}
 
-          {/* POSTURE SKELETON OVERLAY */}
-          {showSkeleton && postureFrame && videoDimensions.width > 0 && (
-            <PostureSkeleton
-              keypoints={postureFrame.keypoints}
-              videoWidth={videoDimensions.width}
-              videoHeight={videoDimensions.height}
-              score={postureFrame.score}
-            />
-          )}
-
-          {/* POSTURE TIP / CALIBRATION BADGE */}
-          {postureFrame?.calibrating && (
-            <div className="absolute top-3 left-1/2 -translate-x-1/2 z-20 bg-black/60 backdrop-blur-sm text-white/70 text-xs font-mono px-4 py-1.5 rounded-full tracking-wider">
-              Hold good posture — calibrating…
-            </div>
-          )}
-          {!postureFrame?.calibrating && postureFrame?.tip && (
-            <div className="absolute top-3 left-1/2 -translate-x-1/2 z-20 bg-black/70 backdrop-blur-sm text-white text-xs font-mono px-4 py-1.5 rounded-full tracking-wider animate-pulse">
-              {postureFrame.tip}
-            </div>
-          )}
-          
-          {/* TELEPROMPTER OVERLAY */}
-          {talkingPoints && talkingPoints.length > 0 && showPrompter && (
+            {/* TELEPROMPTER OVERLAY */}
+            {talkingPoints && talkingPoints.length > 0 && showPrompter && (
               <div
                 onClick={handlePrompterClick}
                 className="absolute bottom-[10%] left-0 right-0 mx-auto max-w-xl bg-black/60 backdrop-blur-md rounded-lg cursor-pointer hover:bg-black/70 transition-colors overflow-hidden"
@@ -398,36 +590,153 @@ export const ViewPractice: React.FC<ViewPracticeProps> = ({ onEnd }) => {
                   {prompterIndex > 0 && (
                     <div className="flex items-start gap-2 text-white/30 text-sm leading-snug transition-all duration-500">
                       <Check className="w-4 h-4 mt-0.5 shrink-0 text-emerald-500/60" />
-                      <span className="line-through decoration-white/20">
-                        {talkingPoints[prompterIndex - 1]}
-                      </span>
+                      <span className="line-through decoration-white/20">{talkingPoints[prompterIndex - 1]}</span>
                     </div>
                   )}
 
                   {/* Current bullet — large & bright */}
                   <div className="flex items-start gap-2 border-l-4 border-emerald-500 pl-3 transition-all duration-500">
-                    <span className="text-white text-xl font-medium serif leading-snug">
-                      {talkingPoints[prompterIndex]}
-                    </span>
+                    <span className="text-white text-xl font-medium serif leading-snug">{talkingPoints[prompterIndex]}</span>
                   </div>
 
                   {/* Next bullet — smaller & dimmed */}
                   {prompterIndex < talkingPoints.length - 1 && (
                     <div className="flex items-start gap-2 pl-5 transition-all duration-500">
-                      <span className="text-white/35 text-sm leading-snug truncate">
-                        {talkingPoints[prompterIndex + 1]}
-                      </span>
+                      <span className="text-white/35 text-sm leading-snug truncate">{talkingPoints[prompterIndex + 1]}</span>
                     </div>
                   )}
                 </div>
               </div>
+            )}
+          </div>
+
+          {hasDeck && pitchDeck && (
+            <div className="w-full aspect-video rounded-sm overflow-hidden border border-stone-200 bg-white shadow-2xl relative">
+              <div className="absolute top-0 left-0 right-0 z-10 px-3 py-2 bg-black/70 text-white flex items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <div className="text-[10px] uppercase tracking-widest text-white/70">Deck Preview</div>
+                  <div className="text-xs truncate">{pitchDeck.fileName}</div>
+                </div>
+                <div className="text-xs font-mono text-white/90 shrink-0">
+                  {isDeckPdf
+                    ? `${currentDeckSlide}${pitchDeck.totalSlides ? `/${pitchDeck.totalSlides}` : ''}`
+                    : isDeckImage
+                      ? 'Image'
+                      : isDeckPptx
+                        ? `${currentDeckSlide}${maxDeckSlide ? `/${maxDeckSlide}` : ''}`
+                        : 'File'}
+                </div>
+              </div>
+
+              <div className="absolute inset-0 pt-11 pb-12 bg-stone-100">
+                {isDeckPdf ? (
+                  <iframe
+                    title="Pitch deck preview"
+                    src={deckPreviewUrl}
+                    className="w-full h-full border-0 bg-white"
+                    loading="eager"
+                  />
+                ) : isDeckImage ? (
+                  <img src={pitchDeck.objectUrl} alt="Pitch deck slide" className="w-full h-full object-contain bg-white" />
+                ) : isDeckPptx ? (
+                  <div ref={pptxPreviewRef} className="w-full h-full relative overflow-hidden bg-black">
+                    {activePptxHtmlSlides.length > 0 ? (
+                      <div
+                        className="w-full h-full"
+                        // HTML is generated locally from the uploaded file.
+                        dangerouslySetInnerHTML={{ __html: activePptxHtmlSlides[currentPptxSlideIndex] ?? '' }}
+                      />
+                    ) : pptxTextSlides.length > 0 ? (
+                      <div className="w-full h-full flex flex-col text-left overflow-y-auto px-6 py-4 bg-white text-sm text-stone-500">
+                        <div className="text-[11px] uppercase tracking-widest text-stone-400 mb-3">Slide {currentPptxSlideIndex + 1}</div>
+                        {pptxTextSlides[currentPptxSlideIndex]
+                          ?.split('\n')
+                          .map((line) => line.trim())
+                          .filter((line) => line.length > 0)
+                          .map((line, index) => (
+                            <p key={`${line}-${index}`} className="text-sm leading-relaxed text-stone-700 mb-2">
+                              {line}
+                            </p>
+                          ))}
+                        {!pptxTextSlides[currentPptxSlideIndex] && (
+                          <p className="text-sm text-stone-400 italic">No text detected on this slide.</p>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="w-full h-full flex flex-col items-center justify-center text-center gap-4 px-6 text-sm text-stone-500 bg-white">
+                        <p>Could not parse this PPTX for inline preview.</p>
+                        <a
+                          href={pitchDeck.objectUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          download={pitchDeck.fileName}
+                          className="px-3 py-1.5 rounded border border-stone-300 text-stone-700 hover:border-stone-500 transition-colors"
+                        >
+                          Open / Download {pitchDeck.fileName}
+                        </a>
+                      </div>
+                    )}
+                    {isPptxRendering && activePptxHtmlSlides.length === 0 && (
+                      <div className="absolute inset-0 flex items-center justify-center bg-black/35 text-white/80 text-xs font-mono tracking-wide">
+                        Rendering slide preview…
+                      </div>
+                    )}
+                  </div>
+                ) : isDeckPowerPoint ? (
+                  <div className="w-full h-full flex flex-col items-center justify-center text-center gap-4 px-6 text-sm text-stone-500 bg-white">
+                    <p>Legacy .ppt files cannot be parsed for inline preview. Save as .pptx for slide preview.</p>
+                    <a
+                      href={pitchDeck.objectUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      download={pitchDeck.fileName}
+                      className="px-3 py-1.5 rounded border border-stone-300 text-stone-700 hover:border-stone-500 transition-colors"
+                    >
+                      Open / Download {pitchDeck.fileName}
+                    </a>
+                  </div>
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center text-center px-6 text-sm text-stone-500 bg-white">
+                    This file cannot be previewed inline.
+                  </div>
+                )}
+              </div>
+
+              <div className="absolute bottom-0 left-0 right-0 z-10 px-3 py-2 bg-black/70 text-white flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => jumpToSlide(currentDeckSlide - 1)}
+                    disabled={!canGoToPrevSlide}
+                    className="p-1 rounded border border-white/25 hover:border-white/50 disabled:opacity-30 disabled:cursor-not-allowed"
+                    title="Previous slide"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => jumpToSlide(currentDeckSlide + 1)}
+                    disabled={!canGoToNextSlide}
+                    className="p-1 rounded border border-white/25 hover:border-white/50 disabled:opacity-30 disabled:cursor-not-allowed"
+                    title="Next slide"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
+                <div className="text-[11px] uppercase tracking-widest text-white/70">
+                  {isDeckPdf || isDeckPptx ? 'Use Left/Right keys' : 'Single slide'}
+                </div>
+              </div>
+            </div>
           )}
         </div>
       </div>
-      
+
+      {deckError && (
+        <div className={`w-full ${layoutMaxWidthClass} mx-auto mt-3 text-xs text-rose-600`}>{deckError}</div>
+      )}
+
       {/* Coach Feedback Floating — positioned between video and transcript */}
       {lastCoachMessage && !isSpeaking && (
-        <div className="w-full max-w-4xl mx-auto mt-2 flex justify-center z-10 shrink-0">
+        <div className={`w-full ${layoutMaxWidthClass} mx-auto mt-3 flex justify-center z-10`}>
           <div className="bg-white/90 backdrop-blur px-6 py-3 rounded-full border border-stone-200 text-stone-900 text-base serif italic shadow-lg max-w-xl truncate">
             "{lastCoachMessage}"
           </div>
@@ -436,12 +745,10 @@ export const ViewPractice: React.FC<ViewPracticeProps> = ({ onEnd }) => {
 
       {/* ── LIVE TRANSCRIPT PANEL ──────────────────────────────────── */}
       {showTranscript && (
-        <div className="w-full max-w-4xl mx-auto mt-2 z-10 shrink-0">
+        <div className={`w-full ${layoutMaxWidthClass} mx-auto mt-4 z-10`}>
           <div className="bg-white/80 backdrop-blur border border-stone-200 rounded-lg shadow-sm overflow-hidden">
             <div className="px-4 py-2 border-b border-stone-100 flex items-center justify-between">
-              <span className="text-xs font-mono text-stone-400 uppercase tracking-widest">
-                Live Transcript
-              </span>
+              <span className="text-xs font-mono text-stone-400 uppercase tracking-widest">Live Transcript</span>
               <span className={`text-xs font-mono ${isConnected ? 'text-emerald-500' : 'text-red-400'}`}>
                 {isConnected ? '● Connected' : '○ Connecting…'}
               </span>
@@ -458,21 +765,47 @@ export const ViewPractice: React.FC<ViewPracticeProps> = ({ onEnd }) => {
         </div>
       )}
 
-      <div className="mt-3 flex justify-between items-center z-10 w-full max-w-4xl mx-auto shrink-0">
+      <div className={`mt-8 flex justify-between items-center z-10 w-full ${layoutMaxWidthClass} mx-auto`}>
         <div className="flex items-center gap-6">
-            {talkingPoints.length > 0 && (
-                <button onClick={() => setShowPrompter(!showPrompter)} className="text-stone-400 hover:text-stone-900 transition-colors" title="Toggle prompter">
-                    {showPrompter ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
-                </button>
-            )}
-            <button onClick={() => setShowTranscript(!showTranscript)} className={`transition-colors ${showTranscript ? 'text-stone-900' : 'text-stone-400 hover:text-stone-900'}`} title="Toggle transcript">
-                <MessageSquare className="w-4 h-4" />
+          {talkingPoints.length > 0 && (
+            <button
+              onClick={() => setShowPrompter(!showPrompter)}
+              className="text-stone-400 hover:text-stone-900 transition-colors"
+              title="Toggle prompter"
+            >
+              {showPrompter ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
             </button>
-            <button onClick={() => setShowSkeleton(!showSkeleton)} className={`transition-colors ${showSkeleton ? 'text-emerald-600' : 'text-stone-400 hover:text-stone-900'}`} title="Toggle posture skeleton">
-                <Activity className="w-4 h-4" />
+          )}
+          <button
+            onClick={() => setShowTranscript(!showTranscript)}
+            className={`transition-colors ${showTranscript ? 'text-stone-900' : 'text-stone-400 hover:text-stone-900'}`}
+            title="Toggle transcript"
+          >
+            <MessageSquare className="w-4 h-4" />
+          </button>
+          <button
+            onClick={() => deckInputRef.current?.click()}
+            className="text-stone-400 hover:text-stone-900 transition-colors"
+            title={hasDeck ? 'Replace deck' : 'Add deck'}
+          >
+            <Upload className="w-4 h-4" />
+          </button>
+          {hasDeck && (
+            <button
+              onClick={handleRemoveDeck}
+              className="text-stone-400 hover:text-rose-600 transition-colors"
+              title="Remove deck"
+            >
+              <Trash2 className="w-4 h-4" />
             </button>
+          )}
         </div>
-        <button onClick={finishSession} className="text-stone-900 hover:text-red-600 tracking-widest uppercase text-xs border-b border-stone-200 hover:border-red-600 pb-1 transition-all">End Session</button>
+        <button
+          onClick={finishSession}
+          className="text-stone-900 hover:text-red-600 tracking-widest uppercase text-xs border-b border-stone-200 hover:border-red-600 pb-1 transition-all"
+        >
+          End Session
+        </button>
       </div>
     </FadeTransition>
   );

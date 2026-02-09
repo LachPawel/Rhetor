@@ -82,7 +82,7 @@ const AppContent: React.FC = () => {
   return (
     <main className="min-h-screen bg-stone-50 text-stone-900 font-sans selection:bg-stone-200 overflow-hidden relative">
         <ConnectionStatusBar />
-        <AIStatusOrb />
+        {currentView !== AppView.HOME && <AIStatusOrb />}
         <CelebrationOverlay />
         <FeedbackToast />
         <FillerIndicator />

@@ -460,7 +460,8 @@ export function useRhetor(options: UseRhetorOptions): UseRhetorReturn {
           context?.detail as { exerciseName?: string; instruction?: string; poseMatched?: boolean; poseHint?: string | null } | undefined
         );
         break;
-      case 'coach_practice':
+      case 'coach_practice': {
+        const deck = useRhetorStore.getState().pitchDeck;
         contextJson = buildPracticeContext(
           user,
           (context?.talkingPoints as string[]) ?? useRhetorStore.getState().talkingPoints,
@@ -470,9 +471,17 @@ export function useRhetor(options: UseRhetorOptions): UseRhetorReturn {
             wpm: useRhetorStore.getState().currentMetrics?.wpm ?? 0,
             clarity: useRhetorStore.getState().currentMetrics?.clarity ?? 100,
             duration: useRhetorStore.getState().currentMetrics?.duration ?? 0,
-          }
+          },
+          deck
+            ? {
+                fileName: deck.fileName,
+                totalSlides: deck.totalSlides,
+                currentSlide: useRhetorStore.getState().currentDeckSlide,
+              }
+            : undefined
         );
         break;
+      }
       case 'analyst':
         contextJson = buildAnalystContext(user, {
           fillerCount: useRhetorStore.getState().currentMetrics?.fillerCount ?? 0,

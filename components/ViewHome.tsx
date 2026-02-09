@@ -1,23 +1,24 @@
 
 import React, { useEffect } from 'react';
 import { FadeTransition } from './FadeTransition.tsx';
-import { AppView, AgentMode } from '../types.ts';
+import { AppView } from '../types.ts';
 import { useRhetor } from '../contexts/RhetorContext.tsx';
 import { Target, Wind, PenTool, Mic, Users, Flame, Coins } from 'lucide-react';
-import { useRhetorStore } from '../stores/useRhetorStore';
 
 interface ViewHomeProps {
   onChangeView: (view: AppView) => void;
 }
 
 export const ViewHome: React.FC<ViewHomeProps> = ({ onChangeView }) => {
-  const { connect, isConnected, isConnecting, setMode, user, talkingPoints } = useRhetor();
+  const { connect, disconnect, isConnected, user, talkingPoints } = useRhetor();
 
   useEffect(() => {
+    // Home should be a quiet screen with no live AI mic/session.
+    // Dedicated experiences (warmup/practice/simulation) reconnect as needed.
     if (isConnected) {
-        setMode(AgentMode.WELCOMER);
+      disconnect();
     }
-  }, [isConnected]);
+  }, [isConnected, disconnect]);
 
   // Connect before warm up action
   const handleWarmUp = async () => {
@@ -43,7 +44,6 @@ export const ViewHome: React.FC<ViewHomeProps> = ({ onChangeView }) => {
 
   return (
     <FadeTransition className="flex flex-col min-h-screen pb-20 bg-stone-50 text-stone-900">
-      
       <div className="px-6 pt-12 flex-1 flex flex-col justify-start gap-8">
         
         {/* Header */}
