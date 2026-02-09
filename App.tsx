@@ -13,6 +13,7 @@ import { ViewInput } from './components/ViewInput.tsx';
 import { ViewPractice } from './components/ViewPractice.tsx';
 import { ViewSimulation } from './components/ViewSimulation.tsx';
 import { ViewReview } from './components/ViewReview.tsx';
+import { ViewKillFillers } from './components/ViewKillFillers.tsx';
 import { ViewLanding } from './components/ViewLanding.tsx';
 import { BottomNav } from './components/BottomNav.tsx';
 import { 
@@ -61,7 +62,8 @@ const AppContent: React.FC = () => {
       AppView.PRACTICE, 
       AppView.SIMULATION,
       AppView.REVIEW, 
-      AppView.LESSON
+      AppView.LESSON,
+      AppView.KILL_FILLERS
   ].includes(currentView);
 
   const handleLessonSelect = (lesson: Lesson) => {
@@ -128,6 +130,10 @@ const AppContent: React.FC = () => {
             
             {currentView === AppView.REVIEW && (
                 <ViewReview key="review" result={sessionResult} onReset={() => setCurrentView(AppView.HOME)} />
+            )}
+
+            {currentView === AppView.KILL_FILLERS && (
+                <ViewKillFillers key="kill-fillers" onExit={() => setCurrentView(AppView.HOME)} />
             )}
         </AnimatePresence>
 
